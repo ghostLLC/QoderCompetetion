@@ -96,6 +96,12 @@ export function createTextElement(
   text: string,
   overrides: Partial<Omit<TextElement, 'id' | 'type' | 'text'>> = {},
 ): TextElement {
+  // `overrides` is typed without identity fields, but TypeScript's structural
+  // typing still lets a complete TextElement through at runtime (Omit only
+  // rejects extra properties on fresh object literals). Strip identity fields
+  // so the factory always owns `id`, `type` and `text`.
+  const { id: _id, type: _type, text: _text, ...style } = overrides as Partial<TextElement>
+
   return {
     ...elementBase(),
     type: 'text',
@@ -108,7 +114,7 @@ export function createTextElement(
     backdrop: null,
     maxWidth: 960,
     align: 'center',
-    ...overrides,
+    ...style,
   }
 }
 

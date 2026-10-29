@@ -96,6 +96,35 @@ describe('createTextElement', () => {
   test('assigns a fresh id to every text element', () => {
     expect(createTextElement('a').id).not.toBe(createTextElement('a').id)
   })
+
+  test('ignores identity fields smuggled through overrides', () => {
+    const original = createTextElement('原句')
+    // TypeScript's Omit only rejects identity fields on fresh object literals;
+    // a whole TextElement is structurally assignable at runtime.
+    const copy = createTextElement('替换文案', original)
+    expect(copy.id).not.toBe(original.id)
+    expect(copy.type).toBe('text')
+    expect(copy.text).toBe('替换文案')
+
+    const twin = createTextElement('第三份', original)
+    expect(new Set([original.id, copy.id, twin.id]).size).toBe(3)
+  })
+
+  test('keeps centered defaults when a whole element is passed as overrides', () => {
+    const copy = createTextElement('新文案', createTextElement('原句'))
+    expect(copy.x).toBe(540)
+    expect(copy.y).toBe(540)
+    expect(copy.rotation).toBe(0)
+    expect(copy.scaleX).toBe(1)
+    expect(copy.scaleY).toBe(1)
+    expect(copy.fontFamily).toBe('smiley')
+    expect(copy.fill).toBe('#ffffff')
+    expect(copy.stroke).toBe('#000000')
+    expect(copy.strokeWidth).toBe(8)
+    expect(copy.backdrop).toBeNull()
+    expect(copy.maxWidth).toBe(960)
+    expect(copy.align).toBe('center')
+  })
 })
 
 describe('createStickerElement', () => {
