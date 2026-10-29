@@ -47,22 +47,32 @@ export interface RenderAssets {
 
 type PatternBackground = Extract<Background, { kind: 'pattern' }>
 
+/** Raw CSS font-family stack; Konva builds its own font string from it. */
+export function fontFamilyCss(fontFamily: FontId): string {
+  return FONT_FAMILY_CSS[fontFamily]
+}
+
 /** CSS font shorthand used by both canvas and the Konva text node. */
 export function fontCss(
   fontFamily: FontId,
   size: number,
   fontWeight: number = TEXT_FONT_WEIGHT,
 ): string {
-  return `${fontWeight} ${size}px ${FONT_FAMILY_CSS[fontFamily]}`
+  return `${fontWeight} ${size}px ${fontFamilyCss(fontFamily)}`
 }
 
 /**
  * Shared caption layout: per-character wrapping and font shrinking, capped at
  * two lines. `measure` receives the exact CSS font shorthand to measure with.
+ *
+ * Line breaks are collapsed to spaces first: canvas `fillText` renders a
+ * newline as whitespace, while Konva.Text treats it as a hard line break. The
+ * editor joins the returned lines with `\n`, so normalising here keeps both
+ * renderers on the identical layout.
  */
 export function textLayoutFor(el: TextElement, measure: TextMeasure): FitTextResult {
   return fitText(
-    el.text,
+    el.text.replace(/\r\n?|\n/g, ' '),
     {
       maxWidth: el.maxWidth,
       maxLines: TEXT_MAX_LINES,

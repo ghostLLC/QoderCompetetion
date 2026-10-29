@@ -185,3 +185,14 @@ test('fontCss and textLayoutFor expose shared typography', () => {
   expect(layout.lines.join('')).toBe('一二三四五六七八')
   expect(layout.fontSize).toBeLessThanOrEqual(80)
 })
+
+test('normalizes newlines so Konva and fillText share one layout', () => {
+  const el = createTextElement('第一行\n第二行', { fontSize: 40, maxWidth: 960 })
+  const measure = (text: string, font: string) => {
+    const size = Number(font.match(/(\d+)px/)![1])
+    return text.length * size
+  }
+  const layout = textLayoutFor(el, measure)
+
+  expect(layout.lines).toEqual(['第一行 第二行'])
+})
