@@ -1,5 +1,6 @@
 import { HashRouter, Route, Routes } from 'react-router-dom'
 import EditorPage from '@/features/editor/EditorPage'
+import PackPage from '@/features/packs/PackPage'
 
 function HomePage() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/create" element={<EditorPage />} />
+        <Route path="/packs" element={<PackPage />} />
       </Routes>
     </HashRouter>
   )
