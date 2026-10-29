@@ -9,3 +9,5 @@ Thumbs.db
 *.log
 .vite/
 coverage/
+
+.superpowers/

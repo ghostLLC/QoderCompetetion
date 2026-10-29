@@ -483,6 +483,7 @@ function fakeCtx() {
     fillRect: () => ops.push('fillRect'), beginPath: () => ops.push('beginPath'),
     fill: () => ops.push('fill'), stroke: () => ops.push('stroke'),
     fillText: (t: string, x: number, y: number) => texts.push({ text: t, x, y }),
+    strokeText: () => ops.push('strokeText'),
     measureText: (t: string) => ({ width: t.length * 10 }),
     setTransform: () => {}, clearRect: () => {}, roundRect: () => {},
   } as unknown as CanvasRenderingContext2D
@@ -606,11 +607,11 @@ test('maskToAlpha normalizes min-max', () => {
 })
 
 test('toCHWFloat32 produces CHW normalized tensor', () => {
-  const rgba = new Uint8ClampedArray([255, 0, 0, 255, 0, 255, 0, 255])
-  const t = toCHWFloat32(rgba, 2)
-  expect(t).toHaveLength(12)
+  const rgba = new Uint8ClampedArray([255, 0, 0, 255]) // one pixel
+  const t = toCHWFloat32(rgba, 1)
+  expect(t).toHaveLength(3)
   expect(t[0]).toBeCloseTo((1 - 0.485) / 0.229, 3)
-  expect(t[8]).toBeCloseTo((1 - 0.406) / 0.225, 3)
+  expect(t[2]).toBeCloseTo((0 - 0.406) / 0.225, 3)
 })
 ```
 
@@ -789,6 +790,7 @@ git commit -m "feat(packs): themed sticker pack generation with grid preview"
 **Interfaces:**
 - `sanitizeFileName(input: string): string` strips `\\ / : * ? " < > |` and control chars, trims dots/spaces, falls back to `未命名`.
 - `buildPackZip(scenes: Scene[], photo, pack: PackDef, onProgress: (pct: number) => void): Promise<Blob>` — renders each scene to PNG via `renderToBlob`, names `斗图军火库_{packName}_{01..10}.png`, adds `使用说明.txt` starting with `\uFEFF`.
+- `buildZipFromBlobs(files: Array<{ name: string; blob: Blob }>, readme: string): Promise<Blob>` — pure JSZip assembly helper exported so Vitest can assert the manifest without canvas.
 - UI: progress bar, cancel not supported (short operation), failure falls back to sequential downloads.
 
 - [ ] **Step 1: Failing tests**
