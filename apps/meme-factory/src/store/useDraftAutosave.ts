@@ -41,6 +41,10 @@ export function useDraftAutosave(enabled: boolean): void {
     }
 
     const flush = () => {
+      // No scheduled save means the last edit is already persisted (or none
+      // was made): an unconditional write would rewrite the draft on every
+      // pagehide and unmount.
+      if (timer === null) return
       cancelTimer()
       persistDraft()
     }
@@ -56,8 +60,8 @@ export function useDraftAutosave(enabled: boolean): void {
     window.addEventListener('pagehide', flush)
 
     return () => {
-      // Persist a pending edit when leaving the editor; `persistDraft` no-ops
-      // once the photo is gone.
+      // Flush only a genuinely pending edit when leaving the editor;
+      // `persistDraft` no-ops once the photo is gone.
       flush()
       unsubscribeScene()
       unsubscribePhoto()

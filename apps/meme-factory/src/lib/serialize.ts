@@ -1,3 +1,4 @@
+import { STICKERS } from '@/data/stickers'
 import type { Background, Scene, SceneElement } from '@/lib/scene'
 
 /** Bump when the persisted scene shape changes incompatibly. */
@@ -23,6 +24,24 @@ function isFiniteNumber(value: unknown): value is number {
 const FONT_IDS = new Set(['smiley', 'system'])
 const ALIGNS = new Set(['left', 'center', 'right'])
 const PATTERNS = new Set(['dots', 'stripes', 'paper'])
+const STICKER_IDS = new Set(STICKERS.map((sticker) => sticker.id))
+
+/** Matches the text panel sliders so persisted values stay editable. */
+const MIN_FONT_SIZE = 24
+const MAX_FONT_SIZE = 120
+const MAX_TEXT_WIDTH = 1080
+
+function isPositive(value: unknown): value is number {
+  return isFiniteNumber(value) && value > 0
+}
+
+function isFontSize(value: unknown): value is number {
+  return isFiniteNumber(value) && value >= MIN_FONT_SIZE && value <= MAX_FONT_SIZE
+}
+
+function isTextWidth(value: unknown): value is number {
+  return isFiniteNumber(value) && value > 0 && value <= MAX_TEXT_WIDTH
+}
 
 function isBackground(value: unknown): value is Background {
   if (!isRecord(value)) return false
@@ -81,8 +100,8 @@ function isSceneElement(value: unknown): value is SceneElement {
   switch (value.type) {
     case 'photo':
       return (
-        isFiniteNumber(value.width) &&
-        isFiniteNumber(value.height) &&
+        isPositive(value.width) &&
+        isPositive(value.height) &&
         typeof value.flipX === 'boolean' &&
         typeof value.frame === 'boolean' &&
         isPhotoFilters(value.filters)
@@ -91,28 +110,40 @@ function isSceneElement(value: unknown): value is SceneElement {
       return (
         isString(value.text) &&
         FONT_IDS.has(value.fontFamily as string) &&
-        isFiniteNumber(value.fontSize) &&
+        isFontSize(value.fontSize) &&
         isString(value.fill) &&
         isString(value.stroke) &&
         isFiniteNumber(value.strokeWidth) &&
         isTextBackdrop(value.backdrop) &&
-        isFiniteNumber(value.maxWidth) &&
+        isTextWidth(value.maxWidth) &&
         ALIGNS.has(value.align as string)
       )
     case 'sticker':
-      return isString(value.stickerId) && isString(value.fill) && isFiniteNumber(value.size)
+      return (
+        isString(value.stickerId) &&
+        STICKER_IDS.has(value.stickerId) &&
+        isString(value.fill) &&
+        isPositive(value.size)
+      )
     default:
       return false
   }
 }
 
 function isScene(value: unknown): value is Scene {
-  return (
-    isRecord(value) &&
-    isBackground(value.background) &&
-    Array.isArray(value.elements) &&
-    value.elements.every(isSceneElement)
-  )
+  if (!isRecord(value) || !isBackground(value.background) || !Array.isArray(value.elements)) {
+    return false
+  }
+
+  // Duplicate ids break selection and React/Konva keys, so reject the scene
+  // rather than let the editor render two indistinguishable elements.
+  const ids = new Set<string>()
+  for (const element of value.elements) {
+    if (!isSceneElement(element)) return false
+    if (ids.has(element.id)) return false
+    ids.add(element.id)
+  }
+  return true
 }
 
 /** Wraps the scene in a versioned envelope so stale drafts can be rejected. */

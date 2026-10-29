@@ -7,6 +7,10 @@ import {
   emptyScene,
 } from '@/lib/scene'
 
+function envelope(elements: unknown[], background: unknown = { kind: 'none' }): string {
+  return JSON.stringify({ version: 1, scene: { background, elements } })
+}
+
 describe('serializeScene / parseScene', () => {
   test('round-trips a scene', () => {
     const scene = { ...emptyScene(), elements: [createTextElement('收到')] }
@@ -129,5 +133,56 @@ describe('serializeScene / parseScene', () => {
         }),
       ),
     ).toBeNull()
+  })
+
+  test('bounds text size and width to values fitText can render', () => {
+    const text = createTextElement('x')
+    expect(parseScene(envelope([{ ...text, fontSize: 24 }]))).not.toBeNull()
+    expect(parseScene(envelope([{ ...text, fontSize: 120 }]))).not.toBeNull()
+    expect(parseScene(envelope([{ ...text, fontSize: 23 }]))).toBeNull()
+    expect(parseScene(envelope([{ ...text, fontSize: 121 }]))).toBeNull()
+    expect(parseScene(envelope([{ ...text, maxWidth: 1 }]))).not.toBeNull()
+    expect(parseScene(envelope([{ ...text, maxWidth: 1080 }]))).not.toBeNull()
+    expect(parseScene(envelope([{ ...text, maxWidth: 0 }]))).toBeNull()
+    expect(parseScene(envelope([{ ...text, maxWidth: -960 }]))).toBeNull()
+    expect(parseScene(envelope([{ ...text, maxWidth: 1081 }]))).toBeNull()
+  })
+
+  test('rejects non-positive photo and sticker dimensions', () => {
+    expect(parseScene(envelope([createPhotoElement(0, 480)]))).toBeNull()
+    expect(parseScene(envelope([createPhotoElement(600, 0)]))).toBeNull()
+    expect(parseScene(envelope([createPhotoElement(-600, 480)]))).toBeNull()
+    expect(parseScene(envelope([{ ...createStickerElement('heart', 300, 420), size: 0 }]))).toBeNull()
+    expect(
+      parseScene(envelope([{ ...createStickerElement('heart', 300, 420), size: -160 }])),
+    ).toBeNull()
+  })
+
+  test('requires a sticker id that exists in the sticker library', () => {
+    expect(parseScene(envelope([createStickerElement('heart', 300, 420)]))).not.toBeNull()
+    expect(
+      parseScene(envelope([{ ...createStickerElement('heart', 300, 420), stickerId: 'unicorn' }])),
+    ).toBeNull()
+    expect(
+      parseScene(envelope([{ ...createStickerElement('heart', 300, 420), stickerId: '' }])),
+    ).toBeNull()
+  })
+
+  test('rejects duplicate or empty element ids', () => {
+    const text = createTextElement('x')
+    const photo = createPhotoElement(600, 480)
+    expect(parseScene(envelope([text, photo]))).not.toBeNull()
+    expect(parseScene(envelope([text, { ...photo, id: text.id }]))).toBeNull()
+    expect(parseScene(envelope([{ ...text, id: '' }]))).toBeNull()
+    expect(
+      parseScene(envelope([{ ...text, id: '' }, { ...photo, id: '' }])),
+    ).toBeNull()
+  })
+
+  test('rejects non-finite transforms', () => {
+    const text = createTextElement('x')
+    // JSON has no NaN/Infinity literals; hand-written payloads carry `null`.
+    expect(parseScene(envelope([{ ...text, rotation: null }]))).toBeNull()
+    expect(parseScene(envelope([{ ...text, scaleX: null }]))).toBeNull()
   })
 })
