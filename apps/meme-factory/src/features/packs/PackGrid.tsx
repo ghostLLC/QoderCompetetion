@@ -16,6 +16,7 @@ interface PackCellProps {
   assets: RenderAssets | null
   downloading: boolean
   busy: boolean
+  locked: boolean
   onCycleCaption: (index: number) => void
   onDownload: (index: number) => void
 }
@@ -27,6 +28,7 @@ const PackCell = memo(function PackCell({
   assets,
   downloading,
   busy,
+  locked,
   onCycleCaption,
   onDownload,
 }: PackCellProps) {
@@ -60,6 +62,7 @@ const PackCell = memo(function PackCell({
         <button
           type="button"
           onClick={() => onCycleCaption(index)}
+          disabled={locked}
           aria-label={`第 ${index + 1} 张换文案`}
           className={`${cellButton} bg-paper hover:bg-alert`}
         >
@@ -85,6 +88,8 @@ interface PackGridProps {
   captions: string[]
   assets: RenderAssets | null
   downloadingIndex: number | null
+  /** True while the whole pack is being archived; locks every cell. */
+  locked: boolean
   onCycleCaption: (index: number) => void
   onDownload: (index: number) => void
 }
@@ -99,12 +104,14 @@ export function PackGrid({
   captions,
   assets,
   downloadingIndex,
+  locked,
   onCycleCaption,
   onDownload,
 }: PackGridProps) {
   return (
     <ul
       aria-label={`${packName}整套预览`}
+      aria-busy={locked}
       className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 xl:grid-cols-5"
     >
       {scenes.map((scene, index) => (
@@ -115,7 +122,8 @@ export function PackGrid({
             caption={captions[index] ?? ''}
             assets={assets}
             downloading={downloadingIndex === index}
-            busy={downloadingIndex !== null}
+            busy={locked || downloadingIndex !== null}
+            locked={locked}
             onCycleCaption={onCycleCaption}
             onDownload={onDownload}
           />

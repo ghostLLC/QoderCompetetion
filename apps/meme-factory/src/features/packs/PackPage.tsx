@@ -11,6 +11,7 @@ import { awaitFonts, downloadBlob, renderToBlob } from '@/lib/export'
 import { bakeFilters } from '@/lib/image'
 import { DESIGN_SIZE, type RenderAssets } from '@/lib/render'
 import type { PhotoElement, PhotoFilters, Scene } from '@/lib/scene'
+import { buildPackZip, packFileName, packZipFileName } from '@/lib/zip'
 import { useEditorStore } from '@/store/editorStore'
 import { usePhotoStore } from '@/store/photoStore'
 
@@ -79,6 +80,9 @@ export function PackPage() {
   const [photo, setPhoto] = useState<LoadedPhoto | null>(null)
   const [photoErrorKey, setPhotoErrorKey] = useState<string | null>(null)
   const [downloadingIndex, setDownloadingIndex] = useState<number | null>(null)
+  const [zipping, setZipping] = useState(false)
+  const [zipPhase, setZipPhase] = useState<'packing' | 'fallback'>('packing')
+  const [zipProgress, setZipProgress] = useState(0)
   const [note, setNote] = useState<string | null>(null)
 
   const photoElement = findPhoto(scene)
@@ -133,6 +137,7 @@ export function PackPage() {
   }, [photoUrl, photoElement, photoKey])
 
   const selectPack = (pack: PackDef) => {
+    if (zipping) return
     const currentPhoto = findPhoto(useEditorStore.getState().scene)
     if (!currentPhoto) return
 
@@ -168,22 +173,65 @@ export function PackPage() {
   }, [])
 
   const downloadScene = async (index: number) => {
-    if (!generated || !activePhoto || downloadingIndex !== null) return
+    if (!generated || !activePhoto || downloadingIndex !== null || zipping) return
     const pack = PACKS.find((item) => item.id === generated.packId)
     const target = generated.scenes[index]
     if (!pack || !target) return
 
-    const filename = `斗图军火库_${pack.name}_${String(index + 1).padStart(2, '0')}.png`
     setDownloadingIndex(index)
     setNote(`正在导出第 ${index + 1} 张…`)
     try {
       const blob = await renderToBlob(target, activePhoto.raw, DESIGN_SIZE)
-      downloadBlob(blob, filename)
+      downloadBlob(blob, packFileName(pack.name, index))
       setNote(`已导出第 ${index + 1} 张 1080×1080 PNG`)
     } catch {
       setNote('导出失败，请重试')
     } finally {
       setDownloadingIndex(null)
+    }
+  }
+
+  // Fallback when the archive cannot be built: render and download each PNG.
+  const downloadIndividually = async (pack: PackDef, scenes: Scene[], photo: CanvasImageSource) => {
+    let failed = 0
+    for (const [index, scene] of scenes.entries()) {
+      setNote(`ZIP 打包失败，改为逐张下载（${index + 1}/${scenes.length}）…`)
+      try {
+        const blob = await renderToBlob(scene, photo, DESIGN_SIZE)
+        downloadBlob(blob, packFileName(pack.name, index))
+      } catch {
+        failed += 1
+      }
+      setZipProgress(Math.round(((index + 1) / scenes.length) * 100))
+    }
+    setNote(
+      failed > 0
+        ? `ZIP 打包失败，有 ${failed} 张没能导出，请重试`
+        : 'ZIP 打包失败，已改为逐张下载全部 PNG',
+    )
+  }
+
+  const downloadZip = async () => {
+    if (!generated || !activePhoto || zipping || downloadingIndex !== null) return
+    const pack = PACKS.find((item) => item.id === generated.packId)
+    if (!pack) return
+
+    const scenes = generated.scenes
+    setZipping(true)
+    setZipPhase('packing')
+    setZipProgress(0)
+    setNote('正在生成 ZIP，请稍候…')
+    try {
+      const blob = await buildPackZip(scenes, activePhoto.raw, pack, setZipProgress)
+      downloadBlob(blob, packZipFileName(pack.name))
+      setNote(`已导出 ZIP：${scenes.length} 张 1080×1080 PNG + 使用说明.txt`)
+    } catch {
+      setZipPhase('fallback')
+      setZipProgress(0)
+      await downloadIndividually(pack, scenes, activePhoto.raw)
+    } finally {
+      setZipping(false)
+      setZipProgress(0)
     }
   }
 
@@ -240,8 +288,9 @@ export function PackPage() {
                       key={pack.id}
                       type="button"
                       aria-pressed={active}
+                      disabled={zipping}
                       onClick={() => selectPack(pack)}
-                      className={`flex flex-col overflow-hidden border-2 border-ink text-left shadow-[3px_3px_0_0_var(--color-ink)] transition-transform hover:-translate-y-0.5 ${focusRing} ${
+                      className={`flex flex-col overflow-hidden border-2 border-ink text-left shadow-[3px_3px_0_0_var(--color-ink)] transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 ${focusRing} ${
                         active ? 'bg-alert' : 'bg-paper'
                       }`}
                     >
@@ -300,12 +349,45 @@ export function PackPage() {
                 </p>
               ) : (
                 <div className="mt-3">
+                  <div className="mb-3 flex flex-wrap items-center gap-2 border-2 border-ink bg-paper px-2.5 py-2.5 shadow-[3px_3px_0_0_var(--color-ink)]">
+                    <button
+                      type="button"
+                      onClick={() => void downloadZip()}
+                      disabled={zipping || downloadingIndex !== null}
+                      className={`${primaryButton} text-sm disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0`}
+                    >
+                      {zipping
+                        ? zipPhase === 'fallback'
+                          ? `正在逐张下载 ${zipProgress}%`
+                          : `正在打包 ${zipProgress}%`
+                        : '整套下载 ZIP'}
+                    </button>
+                    <span className="text-[11px] leading-snug text-ink/60">
+                      {generated.scenes.length} 张 1080×1080 PNG + 使用说明.txt，一次下载
+                    </span>
+                    {zipping ? (
+                      <div
+                        role="progressbar"
+                        aria-label={zipPhase === 'fallback' ? '逐张下载进度' : 'ZIP 打包进度'}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={zipProgress}
+                        className="h-3 w-full max-w-64 overflow-hidden border-2 border-ink bg-paper"
+                      >
+                        <div
+                          className="h-full bg-alert transition-[width] duration-150"
+                          style={{ width: `${zipProgress}%` }}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
                   <PackGrid
                     packName={activePack?.name ?? ''}
                     scenes={generated.scenes}
                     captions={generated.captions}
                     assets={activePhoto.render}
                     downloadingIndex={downloadingIndex}
+                    locked={zipping}
                     onCycleCaption={cycleCaption}
                     onDownload={(index) => void downloadScene(index)}
                   />
