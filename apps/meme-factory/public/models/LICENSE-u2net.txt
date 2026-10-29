@@ -1,0 +1,18 @@
+u2netp ONNX model
+=================
+
+Model: U-2-Net portable (u2netp, 4.7M parameters)
+License: Apache License 2.0
+Upstream source: https://github.com/xuebinqin/U-2-Net
+  Copyright (c) 2020, Xuebin Qin
+  See the upstream repository for the full LICENSE file:
+  https://github.com/xuebinqin/U-2-Net/blob/master/LICENSE
+ONNX export: https://github.com/danielgatis/rembg
+  Downloaded from:
+  https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2netp.onnx
+Retrieved with: npm run fetch-model (scripts/fetch-model.mjs)
+Expected size: 4,574,861 bytes
+
+The model is used only in the browser for on-device saliency/background
+segmentation; uploads are never sent to a server. This file is self-hosted so
+the application makes no third-party requests at runtime.

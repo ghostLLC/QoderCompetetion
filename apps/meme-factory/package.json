@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "node scripts/copy-ort.mjs && vite",
     "build": "node scripts/copy-ort.mjs && tsc -b && vite build",
+    "fetch-model": "node scripts/fetch-model.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "oxlint",
