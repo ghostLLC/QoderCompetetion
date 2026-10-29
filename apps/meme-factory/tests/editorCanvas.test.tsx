@@ -1,9 +1,38 @@
+import { textNodeBox } from '@/features/editor/textNodeBox'
+import type { TextFrame } from '@/features/editor/textNodeBox'
 import { createTextElement, emptyScene } from '@/lib/scene'
 import { useEditorStore } from '@/store/editorStore'
 import { usePhotoStore } from '@/store/photoStore'
 
 beforeEach(() => {
   useEditorStore.getState().reset(emptyScene())
+})
+
+describe('textNodeBox', () => {
+  // Stand-in for a short single-line caption such as "就这？" at 64px: the
+  // measured block is far narrower than the element's 960px maxWidth.
+  const shortCaption: Pick<TextFrame, 'blockWidth' | 'blockHeight'> = {
+    blockWidth: 180,
+    blockHeight: 73.6,
+  }
+
+  test('hugs the measured text block instead of the maxWidth box', () => {
+    const box = textNodeBox(shortCaption, 'center')
+    expect(box).toEqual({ x: -90, y: -36.8, width: 180, height: 73.6 })
+    expect(box.width).toBeLessThan(960)
+  })
+
+  test.each(['left', 'center', 'right'] as const)(
+    'keeps the %s-aligned node on the text block',
+    (align) => {
+      expect(textNodeBox(shortCaption, align)).toEqual({
+        x: -shortCaption.blockWidth / 2,
+        y: -shortCaption.blockHeight / 2,
+        width: shortCaption.blockWidth,
+        height: shortCaption.blockHeight,
+      })
+    },
+  )
 })
 
 test('selection and deletion flow', () => {

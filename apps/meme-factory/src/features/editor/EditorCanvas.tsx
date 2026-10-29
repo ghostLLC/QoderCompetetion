@@ -12,9 +12,15 @@ import {
 } from 'react-konva'
 
 import { getSticker } from '@/data/stickers'
+import { textNodeBox } from '@/features/editor/textNodeBox'
+import type { TextFrame } from '@/features/editor/textNodeBox'
 import { usePhotoAsset } from '@/features/editor/usePhotoAsset'
 import {
+  BACKDROP_PADDING_X,
+  BACKDROP_PADDING_Y,
   DESIGN_SIZE,
+  FRAME_RADIUS,
+  FRAME_WIDTH,
   fontCss,
   fontFamilyCss,
   renderScene,
@@ -26,13 +32,6 @@ import type { RenderAssets, TextMeasure } from '@/lib/render'
 import type { PhotoElement, SceneElement, TextElement } from '@/lib/scene'
 import { useEditorStore } from '@/store/editorStore'
 
-// Geometry mirrored from src/lib/render.ts. Keep these values in sync with the
-// Canvas2D exporter so the editor and the 1080×1080 PNG match exactly.
-const FRAME_WIDTH = 12
-const FRAME_RADIUS = 16
-const BACKDROP_PADDING_X = 28
-const BACKDROP_PADDING_Y = 16
-
 const MIN_ELEMENT_SIZE = 40
 const NUDGE_STEP = 2
 const SHIFT_NUDGE_STEP = 10
@@ -41,13 +40,6 @@ const NODE_ID_PREFIX = 'element-'
 const BACKGROUND_ASSETS: RenderAssets = {
   photo: null,
   photoNatural: { width: 1, height: 1 },
-}
-
-interface TextFrame {
-  lines: string[]
-  fontSize: number
-  blockWidth: number
-  blockHeight: number
 }
 
 function nodeId(id: string): string {
@@ -376,20 +368,15 @@ export function EditorCanvas() {
               const frame = textFrames.get(element.id)
               if (!frame) return null
 
-              const boxWidth = frame.blockWidth + BACKDROP_PADDING_X * 2
-              const boxHeight = frame.blockHeight + BACKDROP_PADDING_Y * 2
+              const box = textNodeBox(frame, element.align)
+              const boxWidth = box.width + BACKDROP_PADDING_X * 2
+              const boxHeight = box.height + BACKDROP_PADDING_Y * 2
               const radius = element.backdrop
                 ? Math.max(
                     0,
                     Math.min(element.backdrop.radius, boxWidth / 2, boxHeight / 2),
                   )
                 : 0
-              const boxLeft =
-                element.align === 'left'
-                  ? -frame.blockWidth / 2
-                  : element.align === 'right'
-                    ? frame.blockWidth / 2 - element.maxWidth
-                    : -element.maxWidth / 2
 
               return (
                 <Group
@@ -414,8 +401,8 @@ export function EditorCanvas() {
                 >
                   {element.backdrop && (
                     <Rect
-                      x={-frame.blockWidth / 2 - BACKDROP_PADDING_X}
-                      y={-frame.blockHeight / 2 - BACKDROP_PADDING_Y}
+                      x={box.x - BACKDROP_PADDING_X}
+                      y={box.y - BACKDROP_PADDING_Y}
                       width={boxWidth}
                       height={boxHeight}
                       cornerRadius={radius}
@@ -426,9 +413,9 @@ export function EditorCanvas() {
                     />
                   )}
                   <KonvaText
-                    x={boxLeft}
-                    y={-frame.blockHeight / 2}
-                    width={element.maxWidth}
+                    x={box.x}
+                    y={box.y}
+                    width={box.width}
                     text={frame.lines.join('\n')}
                     fontFamily={fontFamilyCss(element.fontFamily)}
                     fontSize={frame.fontSize}
@@ -493,6 +480,13 @@ export function EditorCanvas() {
             borderStroke="#E8FF00"
             borderStrokeWidth={2}
             boundBoxFunc={(oldBox, newBox) => {
+              // Text is exempt from the photo/sticker floor: a one-line 24px
+              // caption is only ~28 design px tall, so a 40px minimum would
+              // reject every candidate box and make it impossible to scale.
+              // Only degenerate (zero-size) text boxes are refused.
+              if (selectedElement?.type === 'text') {
+                return newBox.width > 0 && newBox.height > 0 ? newBox : oldBox
+              }
               const minimum = MIN_ELEMENT_SIZE * scale
               if (Math.abs(newBox.width) < minimum || Math.abs(newBox.height) < minimum) {
                 return oldBox

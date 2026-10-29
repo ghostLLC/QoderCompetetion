@@ -1,6 +1,15 @@
 import { STICKERS } from '@/data/stickers'
 import { TEMPLATES } from '@/data/templates'
-import { fontCss, renderScene, textLayoutFor } from '@/lib/render'
+import {
+  BACKDROP_PADDING_X,
+  BACKDROP_PADDING_Y,
+  FRAME_RADIUS,
+  FRAME_WIDTH,
+  fontCss,
+  renderScene,
+  TEXT_LINE_HEIGHT,
+  textLayoutFor,
+} from '@/lib/render'
 import { createPhotoElement, createStickerElement, createTextElement, emptyScene } from '@/lib/scene'
 
 type RecordedCall = { op: string; args: unknown[] }
@@ -106,9 +115,48 @@ test('draws the white frame before the photo itself', () => {
   expect(ops.indexOf('stroke')).toBeGreaterThan(-1)
   expect(ops.indexOf('stroke')).toBeLessThan(ops.indexOf('drawImage'))
   const frame = calls.find((call) => call.op === 'roundRect')!
-  expect(frame.args.slice(0, 4)).toEqual([-206, -156, 412, 312])
+  expect(frame.args.slice(0, 4)).toEqual([
+    -200 - FRAME_WIDTH / 2,
+    -150 - FRAME_WIDTH / 2,
+    400 + FRAME_WIDTH,
+    300 + FRAME_WIDTH,
+  ])
+  expect(frame.args[4]).toBe(FRAME_RADIUS)
   const draw = calls.find((call) => call.op === 'drawImage')!
   expect(draw.args.slice(1)).toEqual([-200, -150, 400, 300])
+})
+
+test('frame and backdrop geometry is exported with the renderer values', () => {
+  expect({ FRAME_WIDTH, FRAME_RADIUS, BACKDROP_PADDING_X, BACKDROP_PADDING_Y }).toEqual({
+    FRAME_WIDTH: 12,
+    FRAME_RADIUS: 16,
+    BACKDROP_PADDING_X: 28,
+    BACKDROP_PADDING_Y: 16,
+  })
+})
+
+test('backdrop box is the measured block plus the shared padding', () => {
+  const el = createTextElement('收到', {
+    fontSize: 64,
+    maxWidth: 960,
+    backdrop: { fill: '#fff', stroke: '#000', strokeWidth: 4, radius: 20 },
+  })
+  const { ctx, calls } = fakeCtx()
+  renderScene(ctx, { ...emptyScene(), elements: [el] }, emptyAssets, 1080)
+
+  const backdrop = calls.find((call) => call.op === 'roundRect')!
+  // fakeCtx measures every character as 10px wide.
+  const blockWidth = 2 * 10
+  const blockHeight = 64 * TEXT_LINE_HEIGHT
+  const boxWidth = blockWidth + BACKDROP_PADDING_X * 2
+  const boxHeight = blockHeight + BACKDROP_PADDING_Y * 2
+  expect(backdrop.args).toEqual([
+    -blockWidth / 2 - BACKDROP_PADDING_X,
+    -blockHeight / 2 - BACKDROP_PADDING_Y,
+    boxWidth,
+    boxHeight,
+    Math.min(20, boxWidth / 2, boxHeight / 2),
+  ])
 })
 
 test('builds an angle-based linear gradient background', () => {

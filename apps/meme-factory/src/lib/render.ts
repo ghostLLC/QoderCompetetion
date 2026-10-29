@@ -23,10 +23,14 @@ export const TEXT_FONT_WEIGHT = 700
 /** Auto-fit never shrinks below this size (the editor slider's lower bound). */
 export const MIN_TEXT_SIZE = 24
 
-const FRAME_WIDTH = 12
-const FRAME_RADIUS = 16
-const BACKDROP_PADDING_X = 28
-const BACKDROP_PADDING_Y = 16
+/** Width of the white band drawn around a framed photo (canvas + editor). */
+export const FRAME_WIDTH = 12
+/** Corner radius of the rounded photo frame rectangle. */
+export const FRAME_RADIUS = 16
+/** Horizontal padding between a text block and its backdrop box. */
+export const BACKDROP_PADDING_X = 28
+/** Vertical padding between a text block and its backdrop box. */
+export const BACKDROP_PADDING_Y = 16
 
 const SYSTEM_FONT_STACK =
   'system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif'
