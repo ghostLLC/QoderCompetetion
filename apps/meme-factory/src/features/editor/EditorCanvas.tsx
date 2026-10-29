@@ -14,6 +14,7 @@ import {
 import { getSticker } from '@/data/stickers'
 import { textNodeBox } from '@/features/editor/textNodeBox'
 import type { TextFrame } from '@/features/editor/textNodeBox'
+import { useMediaQuery } from '@/features/editor/useMediaQuery'
 import { usePhotoAsset } from '@/features/editor/usePhotoAsset'
 import {
   BACKDROP_PADDING_X,
@@ -29,13 +30,17 @@ import {
   textLayoutFor,
 } from '@/lib/render'
 import type { RenderAssets, TextMeasure } from '@/lib/render'
-import type { PhotoElement, SceneElement, TextElement } from '@/lib/scene'
+import type { Background, PhotoElement, SceneElement, TextElement } from '@/lib/scene'
 import { useEditorStore } from '@/store/editorStore'
 
 const MIN_ELEMENT_SIZE = 40
 const NUDGE_STEP = 2
 const SHIFT_NUDGE_STEP = 10
 const NODE_ID_PREFIX = 'element-'
+// Transformer handles render in screen pixels, not design units, so these are
+// used as-is: 22px touch targets, compact mouse handles.
+const TOUCH_ANCHOR_SIZE = 22
+const POINTER_ANCHOR_SIZE = 12
 
 const BACKGROUND_ASSETS: RenderAssets = {
   photo: null,
@@ -44,6 +49,27 @@ const BACKGROUND_ASSETS: RenderAssets = {
 
 function nodeId(id: string): string {
   return `${NODE_ID_PREFIX}${id}`
+}
+
+function backgroundName(background: Background): string {
+  switch (background.kind) {
+    case 'solid':
+      return '纯色背景'
+    case 'gradient':
+      return '渐变背景'
+    case 'pattern':
+      return '图案背景'
+    default:
+      return '无背景'
+  }
+}
+
+function elementName(element: SceneElement): string {
+  if (element.type === 'text') return `文字「${element.text.trim() || '空文字'}」`
+  if (element.type === 'sticker') {
+    return `贴纸「${getSticker(element.stickerId)?.name ?? '贴纸'}」`
+  }
+  return '照片'
 }
 
 /** Mirrors `drawText` in render.ts: same fit, measure and block metrics. */
@@ -136,6 +162,7 @@ export function EditorCanvas() {
 
   const [stageSize, setStageSize] = useState(0)
   const [fontRevision, setFontRevision] = useState(0)
+  const coarsePointer = useMediaQuery('(pointer: coarse)')
 
   const [measure] = useState(createTextMeasure)
   const photoElement = scene.elements.find(
@@ -267,6 +294,21 @@ export function EditorCanvas() {
   const stagePixels = Math.max(1, stageSize)
   const scale = stageSize > 0 ? stageSize / DESIGN_SIZE : 0
 
+  // Describe the design for screen readers instead of exposing the canvas as a
+  // generic application surface.
+  const canvasDescription = useMemo(() => {
+    const names = scene.elements.map(elementName)
+    const summary =
+      names.length > 0 ? `共${names.length}个图层：${names.join('、')}` : '暂无图层'
+    const selected = selectedElement ? `。当前选中${elementName(selectedElement)}` : ''
+    return `表情包画布，1080×1080，${backgroundName(scene.background)}，${summary}${selected}。方向键微调选中元素，Delete 删除。`
+  }, [scene, selectedElement])
+
+  // Konva draws transformer handles at a constant screen size (the layer scale
+  // does not apply to the anchors), so touch handles stay 22px on a phone.
+  const anchorSize = coarsePointer ? TOUCH_ANCHOR_SIZE : POINTER_ANCHOR_SIZE
+  const anchorStrokeWidth = 2
+
   const dismissSelection = useCallback(() => {
     select(null)
   }, [select])
@@ -275,8 +317,8 @@ export function EditorCanvas() {
     <div
       ref={containerRef}
       className="relative aspect-square w-full touch-none select-none"
-      role="application"
-      aria-label="表情包编辑画布"
+      role="img"
+      aria-label={canvasDescription}
     >
       <Stage
         ref={stageRef}
@@ -474,11 +516,12 @@ export function EditorCanvas() {
             keepRatio={keepRatio}
             flipEnabled={false}
             ignoreStroke
-            anchorSize={10}
+            anchorSize={anchorSize}
+            anchorStrokeWidth={anchorStrokeWidth}
             anchorStroke="#111111"
             anchorFill="#E8FF00"
             borderStroke="#E8FF00"
-            borderStrokeWidth={2}
+            borderStrokeWidth={anchorStrokeWidth}
             boundBoxFunc={(oldBox, newBox) => {
               // Text is exempt from the photo/sticker floor: a one-line 24px
               // caption is only ~28 design px tall, so a 40px minimum would

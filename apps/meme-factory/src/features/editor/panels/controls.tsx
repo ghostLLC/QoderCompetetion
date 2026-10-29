@@ -1,10 +1,10 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
-export const focusRing =
-  'focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ink/30 focus-visible:ring-offset-2 focus-visible:ring-offset-paper'
+/** 2px ink focus outline with offset, defined once in styles/index.css. */
+export const focusRing = 'focus-ring'
 
-export const chipBase = `inline-flex items-center justify-center gap-1 border-2 border-ink px-2.5 py-1.5 text-xs font-bold text-ink shadow-[2px_2px_0_0_var(--color-ink)] transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${focusRing}`
+export const chipBase = `inline-flex min-h-11 items-center justify-center gap-1 border-2 border-ink px-2.5 py-1.5 text-xs font-bold text-ink shadow-[2px_2px_0_0_var(--color-ink)] transition-colors disabled:cursor-not-allowed disabled:opacity-40 lg:min-h-0 ${focusRing}`
 
 interface ChipButtonProps {
   active?: boolean
@@ -164,7 +164,7 @@ export function ColorField({ label, value, onCommit, disabled = false }: ColorFi
   return (
     <label
       htmlFor={id}
-      className={`flex items-center justify-between gap-2 border-2 border-ink bg-paper px-2 py-1 text-xs font-bold ${
+      className={`flex min-h-11 items-center justify-between gap-2 border-2 border-ink bg-paper px-2 py-1 text-xs font-bold lg:min-h-0 ${
         disabled ? 'opacity-40' : ''
       }`}
     >
@@ -179,7 +179,7 @@ export function ColorField({ label, value, onCommit, disabled = false }: ColorFi
           disabled={disabled}
           onChange={(event) => setDraft(event.target.value)}
           onBlur={commitDraft}
-          className="h-6 w-8 cursor-pointer border-2 border-ink bg-paper p-0 disabled:cursor-not-allowed"
+          className="h-8 w-10 cursor-pointer border-2 border-ink bg-paper p-0 disabled:cursor-not-allowed lg:h-6 lg:w-8"
         />
       </span>
     </label>

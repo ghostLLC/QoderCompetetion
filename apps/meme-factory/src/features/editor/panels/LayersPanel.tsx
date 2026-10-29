@@ -62,7 +62,7 @@ function LayerAction({
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className={`flex h-6 w-6 shrink-0 items-center justify-center border border-ink bg-paper text-[11px] font-bold leading-none text-ink disabled:cursor-not-allowed disabled:opacity-30 ${focusRing}`}
+      className={`flex h-11 w-11 shrink-0 items-center justify-center border border-ink bg-paper text-[11px] font-bold leading-none text-ink disabled:cursor-not-allowed disabled:opacity-30 lg:h-6 lg:w-6 ${focusRing}`}
     >
       {children}
     </button>
@@ -89,7 +89,7 @@ export function LayersPanel({
       </div>
 
       {scene.elements.length === 0 ? (
-        <p className="text-xs text-ink/50">还没有图层</p>
+        <p className="text-xs text-ink/65">还没有图层</p>
       ) : (
         <ul className="flex flex-col gap-1.5">
           {scene.elements

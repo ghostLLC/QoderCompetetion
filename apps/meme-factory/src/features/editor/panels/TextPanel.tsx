@@ -63,7 +63,7 @@ export function TextPanel({ element, onUpdate, onAdd }: TextPanelProps) {
               onBlur={commitText}
               className={`w-full resize-none border-2 border-ink bg-paper px-2 py-1.5 font-display text-lg font-bold text-ink ${focusRing}`}
             />
-            <p className="text-[10px] text-ink/50">最多两行，超长会自动缩小字号</p>
+            <p className="text-[10px] text-ink/65">最多两行，超长会自动缩小字号</p>
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -125,7 +125,7 @@ export function TextPanel({ element, onUpdate, onAdd }: TextPanelProps) {
       <button
         type="button"
         onClick={onAdd}
-        className={`border-2 border-ink bg-alert px-3 py-2 text-sm font-bold text-ink shadow-[3px_3px_0_0_var(--color-ink)] ${focusRing}`}
+        className={`min-h-11 border-2 border-ink bg-alert px-3 py-2 text-sm font-bold text-ink shadow-[3px_3px_0_0_var(--color-ink)] lg:min-h-0 ${focusRing}`}
       >
         + 添加文字
       </button>

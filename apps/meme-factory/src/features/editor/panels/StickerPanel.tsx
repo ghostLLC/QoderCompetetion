@@ -50,7 +50,7 @@ export function StickerPanel({ selected, onAdd, onColor }: StickerPanelProps) {
           />
         </div>
       ) : (
-        <p className="border-t-2 border-ink/10 pt-2 text-[11px] text-ink/50">
+        <p className="border-t-2 border-ink/10 pt-2 text-[11px] text-ink/65">
           选中一个贴纸即可调整颜色
         </p>
       )}

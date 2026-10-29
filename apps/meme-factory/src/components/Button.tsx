@@ -1,8 +1,8 @@
 import type { ButtonHTMLAttributes } from 'react'
 import { Link, type LinkProps } from 'react-router-dom'
 
-export const focusRing =
-  'focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper'
+/** 2px ink focus outline with offset, defined once in styles/index.css. */
+export const focusRing = 'focus-ring'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ink'
 

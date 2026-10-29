@@ -100,7 +100,7 @@ export function Modal({ open, onClose, title, eyebrow, children }: ModalProps) {
         <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b-[3px] border-ink bg-alert px-5 py-4">
           <div>
             {eyebrow ? (
-              <p className="text-[11px] font-bold tracking-[0.22em] text-ink/60">{eyebrow}</p>
+              <p className="text-[11px] font-bold tracking-[0.22em] text-ink/80">{eyebrow}</p>
             ) : null}
             <h2 id={titleId} className="mt-1 font-display text-3xl font-bold leading-none">
               {title}
@@ -111,7 +111,7 @@ export function Modal({ open, onClose, title, eyebrow, children }: ModalProps) {
             type="button"
             aria-label="关闭弹窗"
             onClick={onClose}
-            className={`inline-flex h-10 w-10 shrink-0 items-center justify-center border-[3px] border-ink bg-paper text-lg font-bold shadow-[3px_3px_0_0_var(--color-ink)] transition-transform hover:-translate-y-0.5 active:translate-y-0 active:shadow-none ${focusRing}`}
+            className={`inline-flex h-11 w-11 shrink-0 items-center justify-center border-[3px] border-ink bg-paper text-lg font-bold shadow-[3px_3px_0_0_var(--color-ink)] transition-transform hover:-translate-y-0.5 active:translate-y-0 active:shadow-none ${focusRing}`}
           >
             <span aria-hidden="true">✕</span>
           </button>

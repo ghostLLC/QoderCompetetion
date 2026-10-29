@@ -10,6 +10,8 @@ import BackgroundPanel from '@/features/editor/panels/BackgroundPanel'
 import FilterPanel from '@/features/editor/panels/FilterPanel'
 import LayersPanel from '@/features/editor/panels/LayersPanel'
 import { canDuplicateElement } from '@/features/editor/panels/layerRules'
+import { PANEL_TABS, type PanelId } from '@/features/editor/panels/panelConfig'
+import { PanelTabs } from '@/features/editor/panels/PanelTabs'
 import StickerPanel from '@/features/editor/panels/StickerPanel'
 import TemplatePanel from '@/features/editor/panels/TemplatePanel'
 import TextPanel from '@/features/editor/panels/TextPanel'
@@ -37,19 +39,9 @@ import { usePhotoStore } from '@/store/photoStore'
 import { useDraftAutosave } from '@/store/useDraftAutosave'
 
 const PHOTO_MAX_EDGE = 780
-const PANEL_TABS = [
-  { id: 'template', label: '模板' },
-  { id: 'text', label: '文字' },
-  { id: 'sticker', label: '贴纸' },
-  { id: 'background', label: '背景' },
-  { id: 'filter', label: '滤镜' },
-  { id: 'layers', label: '图层' },
-] as const
-
-type PanelId = (typeof PANEL_TABS)[number]['id']
 type Stage = 'upload' | 'cutout' | 'editor'
 
-const toolbarButton = `inline-flex items-center gap-1 border-2 border-ink bg-paper px-2.5 py-1.5 text-xs font-bold text-ink shadow-[2px_2px_0_0_var(--color-ink)] disabled:cursor-not-allowed disabled:opacity-40 ${focusRing}`
+const toolbarButton = `inline-flex min-h-11 items-center gap-1 border-2 border-ink bg-paper px-2.5 py-1.5 text-xs font-bold text-ink shadow-[2px_2px_0_0_var(--color-ink)] disabled:cursor-not-allowed disabled:opacity-40 lg:min-h-0 ${focusRing}`
 
 function withPhotoFrame(scene: Scene, frame: boolean): Scene {
   if (!scene.elements.some((element) => element.type === 'photo')) return scene
@@ -59,41 +51,6 @@ function withPhotoFrame(scene: Scene, frame: boolean): Scene {
       element.type === 'photo' ? { ...element, frame } : element,
     ),
   }
-}
-
-function PanelTabs({
-  active,
-  onChange,
-  idPrefix,
-}: {
-  active: PanelId
-  onChange: (id: PanelId) => void
-  idPrefix: string
-}) {
-  return (
-    <div
-      role="tablist"
-      aria-label="编辑面板"
-      className="flex gap-1 overflow-x-auto pb-0.5"
-    >
-      {PANEL_TABS.map((tab) => (
-        <button
-          key={tab.id}
-          id={`${idPrefix}-tab-${tab.id}`}
-          type="button"
-          role="tab"
-          aria-selected={active === tab.id}
-          aria-controls="editor-panel"
-          onClick={() => onChange(tab.id)}
-          className={`shrink-0 border-2 border-ink px-2.5 py-1.5 text-xs font-bold text-ink ${focusRing} ${
-            active === tab.id ? 'bg-alert' : 'bg-paper'
-          }`}
-        >
-          {tab.label}
-        </button>
-      ))}
-    </div>
-  )
 }
 
 export function EditorPage() {
@@ -111,6 +68,7 @@ export function EditorPage() {
     return hasPhoto && hasScene ? 'editor' : 'upload'
   })
   const [activePanel, setActivePanel] = useState<PanelId>('template')
+  const [sheetOpen, setSheetOpen] = useState(false)
   const [activeTemplate, setActiveTemplate] = useState<TemplateId | null>(null)
   const [progress, setProgress] = useState<CutoutProgress | null>(null)
   const [cutoutError, setCutoutError] = useState<string | null>(null)
@@ -456,6 +414,43 @@ export function EditorPage() {
   const downloadPercent =
     progress?.stage === 'download' ? Math.min(100, Math.max(0, progress.percent ?? 0)) : null
 
+  const activePanelLabel =
+    PANEL_TABS.find((tab) => tab.id === activePanel)?.label ?? '编辑'
+
+  // Mobile sheet: return focus to its tab so keyboard users keep their place.
+  const closeSheet = useCallback(() => {
+    setSheetOpen(false)
+    const tabId = `mobile-tab-${activePanel}`
+    requestAnimationFrame(() => document.getElementById(tabId)?.focus())
+  }, [activePanel])
+
+  const selectPanel = useCallback((id: PanelId) => {
+    setActivePanel(id)
+    setSheetOpen(true)
+  }, [])
+
+  const selectMobileTab = useCallback(
+    (id: PanelId) => {
+      if (id === activePanel && sheetOpen) closeSheet()
+      else selectPanel(id)
+    },
+    [activePanel, sheetOpen, closeSheet, selectPanel],
+  )
+
+  useEffect(() => {
+    if (!sheetOpen) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      // The sheet only exists below the lg breakpoint; on desktop the panel is
+      // always visible and Esc should not collapse anything.
+      if (window.innerWidth >= 1024) return
+      event.preventDefault()
+      closeSheet()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [sheetOpen, closeSheet])
+
   const panelContent = (
     <>
       {activePanel === 'template' ? (
@@ -525,30 +520,32 @@ export function EditorPage() {
                 >
                   重做
                 </button>
-                <label className="sr-only" htmlFor="quick-template">
-                  快速切换模板
-                </label>
-                <select
-                  id="quick-template"
-                  value={activeTemplate ?? ''}
-                  onChange={(event) => {
-                    const id = event.target.value as TemplateId
-                    if (id) applyTemplateToMain(id)
-                  }}
-                  className={`h-[34px] border-2 border-ink bg-paper px-1.5 text-xs font-bold text-ink ${focusRing}`}
-                >
-                  <option value="" disabled>
-                    模板…
-                  </option>
-                  {Object.values(TEMPLATES).map((template) => (
-                    <option key={template.id} value={template.id}>
-                      {template.name}
+                <div className="hidden sm:block">
+                  <label className="sr-only" htmlFor="quick-template">
+                    快速切换模板
+                  </label>
+                  <select
+                    id="quick-template"
+                    value={activeTemplate ?? ''}
+                    onChange={(event) => {
+                      const id = event.target.value as TemplateId
+                      if (id) applyTemplateToMain(id)
+                    }}
+                    className={`h-11 border-2 border-ink bg-paper px-1.5 text-xs font-bold text-ink lg:h-[34px] ${focusRing}`}
+                  >
+                    <option value="" disabled>
+                      模板…
                     </option>
-                  ))}
-                </select>
+                    {Object.values(TEMPLATES).map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </>
             ) : null}
-            <Link to="/packs" className={toolbarButton}>
+            <Link to="/packs" className={`${toolbarButton} max-sm:hidden`}>
               生成整套
             </Link>
             {stage === 'editor' ? (
@@ -556,6 +553,7 @@ export function EditorPage() {
                 type="button"
                 onClick={() => void handleExport()}
                 disabled={exporting}
+                aria-busy={exporting}
                 className={`${toolbarButton} bg-alert`}
               >
                 {exporting ? '导出中…' : '导出当前张'}
@@ -611,7 +609,7 @@ export function EditorPage() {
                 className="aspect-square w-full border border-ink/20 object-contain"
               />
             ) : (
-              <div className="flex aspect-square w-full items-center justify-center text-xs text-ink/50">
+              <div className="flex aspect-square w-full items-center justify-center text-xs text-ink/65">
                 照片加载中…
               </div>
             )}
@@ -632,7 +630,7 @@ export function EditorPage() {
             ) : (
               <div className="border-2 border-ink bg-paper p-3 shadow-[4px_4px_0_0_var(--color-ink)]">
                 <div className="flex items-center justify-between gap-2 text-sm font-bold">
-                  <span>{progressLabel}</span>
+                  <span role="status">{progressLabel}</span>
                   {cutoutRunning ? <span aria-hidden="true">…</span> : null}
                 </div>
                 <div
@@ -694,12 +692,8 @@ export function EditorPage() {
       ) : null}
 
       {stage === 'editor' ? (
-        <div className="mx-auto grid max-w-6xl gap-3 px-3 py-3 sm:px-4 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
-          <div className="order-1 min-w-0 lg:hidden">
-            <PanelTabs active={activePanel} onChange={setActivePanel} idPrefix="mobile" />
-          </div>
-
-          <section aria-label="编辑画布" className="order-2 min-w-0 lg:order-none lg:col-start-1 lg:row-start-1">
+        <div className="mx-auto grid max-w-6xl gap-3 px-3 pt-3 pb-24 sm:px-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start lg:pb-3">
+          <section aria-label="编辑画布" className="min-w-0 lg:col-start-1 lg:row-start-1">
             <div className="border-2 border-ink bg-paper p-2 shadow-[6px_6px_0_0_var(--color-ink)]">
               <EditorCanvas />
             </div>
@@ -713,19 +707,49 @@ export function EditorPage() {
             ) : null}
           </section>
 
-          <aside className="order-3 min-w-0 lg:order-none lg:col-start-2 lg:row-start-1">
+          <aside
+            aria-label="编辑面板区域"
+            className={`min-w-0 lg:col-start-2 lg:row-start-1 ${
+              sheetOpen ? 'max-lg:block' : 'max-lg:hidden'
+            }`}
+          >
             <div className="hidden lg:block">
-              <PanelTabs active={activePanel} onChange={setActivePanel} idPrefix="desktop" />
+              <PanelTabs active={activePanel} onChange={selectPanel} idPrefix="desktop" />
             </div>
             <div
               id="editor-panel"
               role="tabpanel"
-              aria-label={`${PANEL_TABS.find((tab) => tab.id === activePanel)?.label ?? ''}面板`}
-              className="mt-2 border-2 border-ink bg-paper p-3 shadow-[4px_4px_0_0_var(--color-ink)] lg:mt-3"
+              aria-label={`${activePanelLabel}面板`}
+              className={`mt-2 border-2 border-ink bg-paper p-3 shadow-[4px_4px_0_0_var(--color-ink)] lg:mt-3 lg:animate-none max-lg:fixed max-lg:inset-x-0 max-lg:bottom-[calc(3.5rem+env(safe-area-inset-bottom))] max-lg:z-40 max-lg:mt-0 max-lg:max-h-[45vh] max-lg:overflow-y-auto max-lg:border-x-0 max-lg:border-b-0 max-lg:shadow-[0_-4px_0_0_rgba(17,17,17,0.18)] ${
+                sheetOpen ? 'editor-sheet-in' : ''
+              }`}
             >
+              <div className="mb-3 flex items-center justify-between gap-2 lg:hidden">
+                <span aria-hidden="true" className="h-1.5 w-10 rounded-full bg-ink/20" />
+                <button
+                  type="button"
+                  onClick={closeSheet}
+                  aria-label="收起编辑面板"
+                  className={`inline-flex min-h-11 items-center gap-1 border-2 border-ink bg-paper px-3 text-xs font-bold text-ink shadow-[2px_2px_0_0_var(--color-ink)] ${focusRing}`}
+                >
+                  收起 <span aria-hidden="true">↓</span>
+                </button>
+              </div>
               {panelContent}
             </div>
           </aside>
+
+          <nav
+            aria-label="编辑面板切换"
+            className="fixed inset-x-0 bottom-0 z-40 border-t-2 border-ink bg-paper pb-[env(safe-area-inset-bottom)] lg:hidden"
+          >
+            <PanelTabs
+              active={activePanel}
+              onChange={selectMobileTab}
+              idPrefix="mobile"
+              variant="bar"
+            />
+          </nav>
         </div>
       ) : null}
     </main>

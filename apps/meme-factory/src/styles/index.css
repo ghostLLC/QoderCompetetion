@@ -28,6 +28,50 @@ body {
   color: var(--color-ink);
 }
 
+/*
+ * Keyboard focus: a 2px ink ring with a 2px offset (ink on paper is ~17:1).
+ * The `:where()` selector keeps specificity at zero so component utilities can
+ * override it; the shared `focus-ring` class opts elements into the same rule
+ * even when a utility resets the default outline.
+ */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible,
+.focus-ring:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+}
+
+/* Bottom sheet used by the mobile editor panels. */
+@keyframes editor-sheet-in {
+  from {
+    transform: translateY(18px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.editor-sheet-in {
+  animation: editor-sheet-in 160ms ease-out;
+}
+
+/* Honor the OS motion preference: no decorative animation at all. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .editor-sheet-in {
+    animation: none !important;
+  }
+}
+
 /* Halftone dot field used behind the hero and around sticker cards. */
 @utility halftone {
   background-image: radial-gradient(circle, rgb(17 17 17 / 0.26) 1.1px, transparent 1.4px);

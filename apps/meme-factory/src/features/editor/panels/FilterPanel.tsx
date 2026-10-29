@@ -1,5 +1,5 @@
 import type { PhotoElement, PhotoFilters } from '@/lib/scene'
-import { ChipButton, SliderField } from './controls'
+import { ChipButton, SliderField, focusRing } from './controls'
 
 const NEUTRAL: PhotoFilters = {
   brightness: 100,
@@ -71,7 +71,7 @@ export function FilterPanel({ element, onUpdate }: FilterPanelProps) {
         type="button"
         disabled={!element}
         onClick={() => element && onUpdate({ filters: { ...NEUTRAL } })}
-        className="border-2 border-ink bg-paper px-2 py-1 text-xs font-bold text-ink disabled:cursor-not-allowed disabled:opacity-40"
+        className={`min-h-11 border-2 border-ink bg-paper px-2 py-1 text-xs font-bold text-ink disabled:cursor-not-allowed disabled:opacity-40 lg:min-h-0 ${focusRing}`}
       >
         重置滤镜
       </button>
