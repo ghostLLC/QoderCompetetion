@@ -640,12 +640,14 @@ git commit -m "feat(cutout): on-device u2netp background removal with progress"
 ### Task 9: Konva editor canvas (M2a)
 
 **Files:**
-- Create: `src/features/editor/EditorCanvas.tsx`, `src/features/editor/usePhotoAsset.ts`, `tests/editorCanvas.test.tsx` (store-level only)
+- Create: `src/features/editor/EditorCanvas.tsx`, `src/features/editor/usePhotoAsset.ts`, `src/store/photoStore.ts`, `tests/editorCanvas.test.tsx` (store-level only)
 - Modify: `src/lib/render.ts` (export `fontCss(fontFamily, size, fontWeight)` helper shared with Konva)
 
 **Interfaces:**
 - Consumes: `useEditorStore`, `fitText`, `getSticker`.
-- Produces: `<EditorCanvas photo: HTMLImageElement | null />` — interactive 1080-design stage scaled to container; selection + Transformer; drag/scale/rotate; click empty deselects; Delete removes selected; Ctrl/Cmd+Z / Shift+Z undo/redo; Arrow keys nudge by 2px (Shift 10px).
+- Produces:
+  - `usePhotoStore`: `{ original: Blob | null; cutout: Blob | null; photoUrl: string | null; setPhoto(original: Blob, cutout: Blob | null): void; clear(): void }` — creates/revokes object URLs; editor, packs page and draft saver read from here.
+  - `<EditorCanvas />` — reads `usePhotoStore`, interactive 1080-design stage scaled to container; selection + Transformer; drag/scale/rotate; click empty deselects; Delete removes selected; Ctrl/Cmd+Z / Shift+Z undo/redo; Arrow keys nudge by 2px (Shift 10px).
 
 - [ ] **Step 1: Implement stage**
 
@@ -684,12 +686,12 @@ git commit -m "feat(editor): interactive konva canvas with transform and shortcu
 ### Task 10: Editor panels + create flow (M2b)
 
 **Files:**
-- Create: `src/features/editor/EditorPage.tsx`, `src/features/editor/panels/TemplatePanel.tsx`, `TextPanel.tsx`, `StickerPanel.tsx`, `BackgroundPanel.tsx`, `FilterPanel.tsx`, `LayersPanel.tsx`, `src/features/editor/applyTemplate.ts`, `src/store/photoStore.ts`, `src/lib/export.ts`, `tests/applyTemplate.test.ts`
+- Create: `src/features/editor/EditorPage.tsx`, `src/features/editor/panels/TemplatePanel.tsx`, `TextPanel.tsx`, `StickerPanel.tsx`, `BackgroundPanel.tsx`, `FilterPanel.tsx`, `LayersPanel.tsx`, `src/features/editor/applyTemplate.ts`, `src/lib/export.ts`, `tests/applyTemplate.test.ts`
 - Modify: `src/App.tsx` (route `/create`), `src/store/editorStore.ts` (add `updateSelected(patch)` helper using `commit`)
 
 **Interfaces:**
 - `applyTemplate(scene, template, mainTextId): Scene` — removes all elements whose id starts with `accent-` (template decorations from a previous application), updates background, updates the main text element's style (keeps `text`), repositions it (`x=540`, `y`: top→170, center→540, bottom→910, plus template rotate), adds accents with ids `accent-${newId()}`. Applying the same template twice yields exactly `accentStickers.length` stickers.
-- `usePhotoStore`: `{ original: Blob | null; cutout: Blob | null; photoUrl: string | null; setPhoto(original: Blob, cutout: Blob | null): void; clear(): void }` — creates/revokes object URLs; the editor, packs page and draft saver read from here.
+- Consumes `usePhotoStore` from Task 9 (`{ original, cutout, photoUrl, setPhoto, clear }`) for the upload/cutout stages.
 - `lib/export.ts`: `renderToBlob(scene, photoBitmap, size=1080): Promise<Blob>` (OffscreenCanvas with DOM fallback), `downloadBlob(blob, filename)`, `awaitFonts()` (loads Smiley Sans weights + `document.fonts.ready`), single-export filename `斗图军火库_单张.png`.
 - `EditorPage` steps: upload → cutout with progress/cancel/skip → editor. Photo Blob goes to `usePhotoStore`. On skip/failure, `photo.frame = true` (defined in Task 3) — renderer and Konva both stroke a 12px white rounded border (frame mode).
 - Panels:
