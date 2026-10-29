@@ -109,7 +109,7 @@ export function LayersPanel({
                     type="button"
                     aria-pressed={selected}
                     onClick={() => onSelect(element.id)}
-                    className={`flex min-w-0 flex-1 items-center gap-1.5 pr-1 text-left ${focusRing}`}
+                    className={`flex min-h-11 min-w-0 flex-1 items-center gap-1.5 pr-1 text-left lg:min-h-0 ${focusRing}`}
                   >
                     <LayerIcon element={element} />
                     <span className="min-w-0 truncate text-xs font-bold">{layerName(element)}</span>

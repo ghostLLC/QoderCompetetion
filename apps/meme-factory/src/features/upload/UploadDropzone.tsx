@@ -28,9 +28,6 @@ function CameraIcon() {
   )
 }
 
-const focusRing =
-  'focus-visible:ring-4 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper focus-visible:outline-none'
-
 async function decodeAndDownscale(file: Blob): Promise<Blob> {
   const bitmap = await decodeImage(file)
   try {
@@ -169,7 +166,7 @@ export function UploadDropzone({ onPhoto }: UploadDropzoneProps) {
           aria-describedby={hintId}
           onClick={openGallery}
           onKeyDown={(event) => handleKeyDown(openGallery, event)}
-          className={`rounded-xl ${focusRing}`}
+          className="rounded-xl"
         >
           <span className="inline-flex -rotate-2 items-center gap-2 border-2 border-ink bg-alert px-4 py-2 font-display text-xl font-bold text-ink shadow-[4px_4px_0_0_var(--color-ink)]">
             <CameraIcon />
@@ -185,7 +182,7 @@ export function UploadDropzone({ onPhoto }: UploadDropzoneProps) {
           type="button"
           onClick={openCamera}
           onKeyDown={(event) => handleKeyDown(openCamera, event)}
-          className={`inline-flex items-center gap-2 rounded-xl border-2 border-ink bg-paper px-3 py-1.5 text-sm font-bold text-ink shadow-[2px_2px_0_0_var(--color-ink)] ${focusRing}`}
+          className="inline-flex items-center gap-2 rounded-xl border-2 border-ink bg-paper px-3 py-1.5 text-sm font-bold text-ink shadow-[2px_2px_0_0_var(--color-ink)]"
         >
           <CameraIcon />
           拍照

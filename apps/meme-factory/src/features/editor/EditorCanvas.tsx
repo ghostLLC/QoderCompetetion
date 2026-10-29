@@ -136,6 +136,34 @@ function isTextEntryTarget(target: EventTarget | null): boolean {
   })
 }
 
+// Any control that handles its own key presses. Focused tabs/buttons receive
+// Arrow/Delete keydowns; those must not also nudge or delete a canvas element.
+const INTERACTIVE_SELECTOR = [
+  'button',
+  'a[href]',
+  'summary',
+  'input',
+  'textarea',
+  'select',
+  '[contenteditable="true"]',
+  '[role="button"]',
+  '[role="tab"]',
+  '[role="switch"]',
+  '[role="checkbox"]',
+  '[role="radio"]',
+  '[role="slider"]',
+  '[role="textbox"]',
+  '[role="link"]',
+  '[role="menuitem"]',
+  '[role="option"]',
+].join(', ')
+
+function isInteractiveTarget(target: EventTarget | null): boolean {
+  if (typeof HTMLElement === 'undefined' || !(target instanceof HTMLElement)) return false
+  if (target.isContentEditable) return true
+  return target.closest(INTERACTIVE_SELECTOR) !== null
+}
+
 /** Canvas 2D measurement shared with the exporter (`ctx.measureText`). */
 function createTextMeasure(): TextMeasure {
   const context = document.createElement('canvas').getContext('2d')
@@ -212,13 +240,16 @@ export function EditorCanvas() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.isComposing || isTextEntryTarget(event.target)) return
+      // Another component already claimed this key.
+      if (event.isComposing || event.defaultPrevented) return
 
       const state = useEditorStore.getState()
       const mod = event.metaKey || event.ctrlKey
       const key = event.key
 
+      // Undo/redo stays global, but never steals Ctrl/Cmd+Z from a text field.
       if (mod && key.toLowerCase() === 'z') {
+        if (isTextEntryTarget(event.target)) return
         event.preventDefault()
         if (event.shiftKey) state.redo()
         else state.undo()
@@ -226,6 +257,10 @@ export function EditorCanvas() {
       }
 
       if (mod || event.altKey) return
+
+      // Focused controls own Arrow/Delete: a tab press must not also nudge or
+      // delete the selected element.
+      if (isInteractiveTarget(event.target) || isTextEntryTarget(event.target)) return
 
       if (key === 'Delete' || key === 'Backspace') {
         if (!state.selectedId) return
@@ -301,7 +336,7 @@ export function EditorCanvas() {
     const summary =
       names.length > 0 ? `共${names.length}个图层：${names.join('、')}` : '暂无图层'
     const selected = selectedElement ? `。当前选中${elementName(selectedElement)}` : ''
-    return `表情包画布，1080×1080，${backgroundName(scene.background)}，${summary}${selected}。方向键微调选中元素，Delete 删除。`
+    return `表情包画布，${DESIGN_SIZE}×${DESIGN_SIZE}，${backgroundName(scene.background)}，${summary}${selected}。方向键微调选中元素，Delete 删除。`
   }, [scene, selectedElement])
 
   // Konva draws transformer handles at a constant screen size (the layer scale

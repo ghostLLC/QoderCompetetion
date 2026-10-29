@@ -40,7 +40,9 @@ body {
   outline-offset: 2px;
 }
 
-/* Bottom sheet used by the mobile editor panels. */
+/* Bottom sheet used by the mobile editor panels. Scoped below `lg` so the
+ * desktop panel never animates; an unlayered rule would otherwise beat
+ * `lg:animate-none`. */
 @keyframes editor-sheet-in {
   from {
     transform: translateY(18px);
@@ -52,8 +54,10 @@ body {
   }
 }
 
-.editor-sheet-in {
-  animation: editor-sheet-in 160ms ease-out;
+@media (max-width: 1023.98px) {
+  .editor-sheet-in {
+    animation: editor-sheet-in 160ms ease-out;
+  }
 }
 
 /* Honor the OS motion preference: no decorative animation at all. */

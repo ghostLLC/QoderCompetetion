@@ -707,6 +707,22 @@ export function EditorPage() {
             ) : null}
           </section>
 
+          {/* Fixed on mobile, but it must precede the sheet in DOM so forward
+              Tab from the active tab enters the open panel. */}
+          <nav
+            aria-label="编辑面板切换"
+            className="fixed inset-x-0 bottom-0 z-40 border-t-2 border-ink bg-paper pb-[calc(env(safe-area-inset-bottom)+0.25rem)] lg:hidden"
+          >
+            <PanelTabs
+              active={activePanel}
+              onChange={selectMobileTab}
+              idPrefix="mobile"
+              panelId="editor-panel"
+              expanded={sheetOpen}
+              variant="bar"
+            />
+          </nav>
+
           <aside
             aria-label="编辑面板区域"
             className={`min-w-0 lg:col-start-2 lg:row-start-1 ${
@@ -714,13 +730,18 @@ export function EditorPage() {
             }`}
           >
             <div className="hidden lg:block">
-              <PanelTabs active={activePanel} onChange={selectPanel} idPrefix="desktop" />
+              <PanelTabs
+                active={activePanel}
+                onChange={selectPanel}
+                idPrefix="desktop"
+                panelId="editor-panel"
+              />
             </div>
             <div
               id="editor-panel"
               role="tabpanel"
               aria-label={`${activePanelLabel}面板`}
-              className={`mt-2 border-2 border-ink bg-paper p-3 shadow-[4px_4px_0_0_var(--color-ink)] lg:mt-3 lg:animate-none max-lg:fixed max-lg:inset-x-0 max-lg:bottom-[calc(3.5rem+env(safe-area-inset-bottom))] max-lg:z-40 max-lg:mt-0 max-lg:max-h-[45vh] max-lg:overflow-y-auto max-lg:border-x-0 max-lg:border-b-0 max-lg:shadow-[0_-4px_0_0_rgba(17,17,17,0.18)] ${
+              className={`mt-2 border-2 border-ink bg-paper p-3 shadow-[4px_4px_0_0_var(--color-ink)] lg:mt-3 max-lg:fixed max-lg:inset-x-0 max-lg:bottom-[calc(3.5rem+2px+0.25rem+env(safe-area-inset-bottom))] max-lg:z-40 max-lg:mt-0 max-lg:max-h-[45vh] max-lg:overflow-y-auto max-lg:border-x-0 max-lg:border-b-0 max-lg:shadow-[0_-4px_0_0_rgba(17,17,17,0.18)] ${
                 sheetOpen ? 'editor-sheet-in' : ''
               }`}
             >
@@ -738,18 +759,6 @@ export function EditorPage() {
               {panelContent}
             </div>
           </aside>
-
-          <nav
-            aria-label="编辑面板切换"
-            className="fixed inset-x-0 bottom-0 z-40 border-t-2 border-ink bg-paper pb-[env(safe-area-inset-bottom)] lg:hidden"
-          >
-            <PanelTabs
-              active={activePanel}
-              onChange={selectMobileTab}
-              idPrefix="mobile"
-              variant="bar"
-            />
-          </nav>
         </div>
       ) : null}
     </main>

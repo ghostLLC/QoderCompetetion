@@ -33,3 +33,18 @@
 ### 结论
 
 M1 冒烟通过：静态 Vite 产物可发布、公开访问、资源加载正常。遗留观察：SPA 深链无回退、资源无长缓存、页面带平台水印；在进入重功能开发前无需阻塞，但最终部署（M5）时需复查。
+
+## 2026-10-29 · Task 15 复查：Lighthouse 记录
+
+工具：chrome-devtools MCP `lighthouse_audit`（chrome-devtools-mcp 1.9.0），本地 dev server `http://localhost:5173`，运行日期 2026-10-29。
+
+| 页面 | 模式 / 视口 | 无障碍 | 最佳实践 | SEO |
+|---|---|---:|---:|---:|
+| 编辑台 `/#/create`（移动端面板展开） | snapshot / 375×812 mobile | 100 | 100 | 80* |
+| 编辑台 `/#/create` | snapshot / 1440×1000 desktop | 100 | 100 | 80* |
+| 首页 `/#/` | snapshot / 375×812 mobile | 100 | 100 | 83* |
+| 首页 `/#/` | navigation / 375×812 mobile | 100 | 100 | 92 |
+
+\* snapshot 模式没有 URL，SEO 分数不可比；导航模式首页 SEO 92 来自 hash 路由。
+
+编辑台在修复后两个视口均为无障碍 100；首页在 Task 14 对比度修复后同样为 100。补充实测：375×812 下 `scrollWidth` 为 375（无横向滚动）；底部 tab 栏高 62 px（56 px 按钮 + 2 px 上边框 + 4 px 焦点环留白），展开面板底边位于 750 px（45 vh = 365.4 px），不与 tab 栏重叠。
