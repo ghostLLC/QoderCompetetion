@@ -1,20 +1,21 @@
 import JSZip from 'jszip'
 
 import { PACKS } from '@/data/packs'
-import { sanitizeFileName } from '@/lib/filename'
-import type { Scene } from '@/lib/scene'
+import { renderToBlob } from '@/lib/export'
 import {
-  buildPackZip,
-  buildZipFromBlobs,
   packFileName,
   packZipFileName,
+  sanitizeFileName,
   ZIP_APP_NAME,
-  ZIP_README_FILENAME,
-} from '@/lib/zip'
+} from '@/lib/filename'
+import type { Scene } from '@/lib/scene'
+import { buildPackZip, buildZipFromBlobs, ZIP_README_FILENAME } from '@/lib/zip'
 
 vi.mock('@/lib/export', () => ({
   renderToBlob: vi.fn(async () => new Blob(['fake-png'], { type: 'image/png' })),
 }))
+
+const mockedRender = vi.mocked(renderToBlob)
 
 function packFileNames(packName: string): string[] {
   return Array.from({ length: 10 }, (_, index) => packFileName(packName, index))
@@ -59,6 +60,7 @@ describe('buildZipFromBlobs', () => {
       expect(zip.file(name)).not.toBeNull()
     }
     expect(zip.file(ZIP_README_FILENAME)).not.toBeNull()
+    expect(zip.file('使用说明.txt')).not.toBeNull()
     expect(names[0]).toBe('斗图军火库_宿舍生存_01.png')
     expect(names[9]).toBe('斗图军火库_宿舍生存_10.png')
 
@@ -77,6 +79,10 @@ describe('buildPackZip', () => {
     elements: [],
   }))
 
+  beforeEach(() => {
+    mockedRender.mockClear()
+  })
+
   test('sanitizes the pack name, adds the readme and reports monotonic progress', async () => {
     const pack = { ...PACKS[0]!, name: '宿舍/生存' }
     const progress: number[] = []
@@ -90,19 +96,48 @@ describe('buildPackZip', () => {
       expect.arrayContaining([
         '斗图军火库_宿舍生存_01.png',
         '斗图军火库_宿舍生存_10.png',
-        ZIP_README_FILENAME,
+        '使用说明.txt',
       ]),
     )
+    expect(zip.file('使用说明.txt')).not.toBeNull()
 
     const readme = await zip.file(ZIP_README_FILENAME)!.async('string')
     expect(readme.charCodeAt(0)).toBe(0xfeff)
     expect(readme).toContain('斗图军火库')
     expect(readme).toContain('不会上传')
+    expect(readme).toContain('1080×1080')
     expect(readme).toMatch(/\d{4}-\d{2}-\d{2}/)
+
+    // Every scene is rendered once, at full design resolution.
+    expect(mockedRender).toHaveBeenCalledTimes(10)
+    for (const [index, scene] of scenes.entries()) {
+      expect(mockedRender).toHaveBeenNthCalledWith(index + 1, scene, null, 1080)
+    }
 
     expect(progress.length).toBeGreaterThan(0)
     expect(progress.at(-1)).toBe(100)
     expect(progress).toEqual([...progress].sort((a, b) => a - b))
+  })
+
+  test('rejects when a scene cannot be rendered', async () => {
+    const pack = PACKS[0]!
+    const progress: number[] = []
+    mockedRender.mockRejectedValueOnce(new Error('canvas unavailable'))
+
+    await expect(
+      buildPackZip(scenes, null, pack, (pct) => progress.push(pct)),
+    ).rejects.toThrow('canvas unavailable')
+
+    // Rendering stopped at the first failure; no zip progress was reported.
+    expect(mockedRender).toHaveBeenCalledTimes(1)
+    expect(progress).toEqual([0])
+  })
+
+  test('throws when there are no scenes to export', async () => {
+    const pack = PACKS[0]!
+
+    await expect(buildPackZip([], null, pack)).rejects.toThrow('没有可导出的表情包')
+    expect(mockedRender).not.toHaveBeenCalled()
   })
 
   test('zip filename keeps the standard pattern', () => {

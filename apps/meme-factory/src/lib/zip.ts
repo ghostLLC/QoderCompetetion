@@ -1,13 +1,9 @@
-import JSZip from 'jszip'
-
 import type { PackDef } from '@/data/packs'
 import { renderToBlob } from '@/lib/export'
-import { sanitizeFileName } from '@/lib/filename'
+import { packFileName, sanitizeFileName, ZIP_APP_NAME } from '@/lib/filename'
 import { DESIGN_SIZE } from '@/lib/render'
 import type { Scene } from '@/lib/scene'
 
-/** Brand shown in ZIP entry names and the bundled readme. */
-export const ZIP_APP_NAME = '斗图军火库'
 /** Readme entry written next to the PNGs. */
 export const ZIP_README_FILENAME = '使用说明.txt'
 /** Rendering fills the first 80% of the reported progress, zipping the rest. */
@@ -16,16 +12,6 @@ const RENDER_PROGRESS_SHARE = 80
 export interface ZipFileEntry {
   name: string
   blob: Blob
-}
-
-/** `斗图军火库_宿舍生存_01.png` — 1-based index, zero padded to two digits. */
-export function packFileName(packName: string, index: number): string {
-  return `${ZIP_APP_NAME}_${sanitizeFileName(packName)}_${String(index + 1).padStart(2, '0')}.png`
-}
-
-/** `斗图军火库_宿舍生存.zip` — the download name of the whole-pack archive. */
-export function packZipFileName(packName: string): string {
-  return `${ZIP_APP_NAME}_${sanitizeFileName(packName)}.zip`
 }
 
 function formatDate(date: Date): string {
@@ -45,7 +31,7 @@ export function buildReadme(
   return [
     `\uFEFF${ZIP_APP_NAME} · ${sanitizeFileName(packName)} 整套表情包`,
     '',
-    `共 ${count} 张，均为 1080×1080 PNG。`,
+    `共 ${count} 张，均为 ${DESIGN_SIZE}×${DESIGN_SIZE} PNG。`,
     '',
     '使用说明：',
     '1. 图片可直接发到微信、QQ 等聊天工具，存为表情使用。',
@@ -67,6 +53,8 @@ export async function buildZipFromBlobs(
   readme: string,
   onGenerateProgress?: (percent: number) => void,
 ): Promise<Blob> {
+  // Loaded on demand so the packs route does not ship JSZip in the entry chunk.
+  const { default: JSZip } = await import('jszip')
   const zip = new JSZip()
   for (const file of files) zip.file(file.name, file.blob)
   zip.file(ZIP_README_FILENAME, readme)

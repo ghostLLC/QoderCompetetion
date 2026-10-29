@@ -8,16 +8,20 @@ import { focusRing } from '@/features/editor/panels/controls'
 import { buildPackScene } from '@/features/packs/buildPackScene'
 import { PackGrid } from '@/features/packs/PackGrid'
 import { awaitFonts, downloadBlob, renderToBlob } from '@/lib/export'
+import { packFileName, packZipFileName } from '@/lib/filename'
 import { bakeFilters } from '@/lib/image'
 import { DESIGN_SIZE, type RenderAssets } from '@/lib/render'
 import type { PhotoElement, PhotoFilters, Scene } from '@/lib/scene'
-import { buildPackZip, packFileName, packZipFileName } from '@/lib/zip'
+import { buildPackZip } from '@/lib/zip'
 import { useEditorStore } from '@/store/editorStore'
 import { usePhotoStore } from '@/store/photoStore'
 
 const toolbarButton = `inline-flex items-center gap-1 border-2 border-ink bg-paper px-2.5 py-1.5 text-xs font-bold text-ink shadow-[2px_2px_0_0_var(--color-ink)] ${focusRing}`
 
 const primaryButton = `inline-flex items-center justify-center gap-1 border-2 border-ink bg-alert px-4 py-2 font-bold text-ink shadow-[3px_3px_0_0_var(--color-ink)] transition-transform hover:-translate-y-0.5 ${focusRing}`
+
+/** Gap between fallback downloads so browsers are less likely to block later files. */
+const FALLBACK_DOWNLOAD_GAP_MS = 300
 
 /** One generated pack: the selected theme, its current captions and scenes. */
 interface GeneratedPack {
@@ -196,6 +200,9 @@ export function PackPage() {
     let failed = 0
     for (const [index, scene] of scenes.entries()) {
       setNote(`ZIP 打包失败，改为逐张下载（${index + 1}/${scenes.length}）…`)
+      if (index > 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, FALLBACK_DOWNLOAD_GAP_MS))
+      }
       try {
         const blob = await renderToBlob(scene, photo, DESIGN_SIZE)
         downloadBlob(blob, packFileName(pack.name, index))
@@ -207,7 +214,7 @@ export function PackPage() {
     setNote(
       failed > 0
         ? `ZIP 打包失败，有 ${failed} 张没能导出，请重试`
-        : 'ZIP 打包失败，已改为逐张下载全部 PNG',
+        : 'ZIP 打包失败，已发起逐张下载；若浏览器拦截，请允许后重试',
     )
   }
 
