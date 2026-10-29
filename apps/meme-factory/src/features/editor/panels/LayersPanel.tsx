@@ -1,6 +1,7 @@
 import { getSticker } from '@/data/stickers'
 import type { Scene, SceneElement } from '@/lib/scene'
 import { focusRing } from './controls'
+import { canDuplicateElement } from './layerRules'
 import type { ReactNode } from 'react'
 
 export interface LayersPanelProps {
@@ -96,6 +97,7 @@ export function LayersPanel({
             .reverse()
             .map(({ element, index }) => {
               const selected = element.id === selectedId
+              const duplicable = canDuplicateElement(element.type)
               return (
                 <li
                   key={element.id}
@@ -126,7 +128,11 @@ export function LayersPanel({
                   >
                     ↓
                   </LayerAction>
-                  <LayerAction label="复制" onClick={() => onDuplicate(element.id)}>
+                  <LayerAction
+                    label={duplicable ? '复制' : '照片不可复制'}
+                    disabled={!duplicable}
+                    onClick={() => onDuplicate(element.id)}
+                  >
                     ⧉
                   </LayerAction>
                   <LayerAction label="删除" onClick={() => onDelete(element.id)}>

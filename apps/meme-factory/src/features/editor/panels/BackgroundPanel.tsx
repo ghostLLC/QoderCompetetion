@@ -57,7 +57,7 @@ export function BackgroundPanel({ background, onChange }: BackgroundPanelProps) 
         <ColorField
           label="背景颜色"
           value={background.color}
-          onChange={(color) => onChange({ kind: 'solid', color })}
+          onCommit={(color) => onChange({ kind: 'solid', color })}
         />
       ) : null}
 
@@ -66,12 +66,12 @@ export function BackgroundPanel({ background, onChange }: BackgroundPanelProps) 
           <ColorField
             label="起始颜色"
             value={background.from}
-            onChange={(from) => onChange({ ...background, from })}
+            onCommit={(from) => onChange({ ...background, from })}
           />
           <ColorField
             label="结束颜色"
             value={background.to}
-            onChange={(to) => onChange({ ...background, to })}
+            onCommit={(to) => onChange({ ...background, to })}
           />
           <SliderField
             label="角度"
@@ -101,12 +101,12 @@ export function BackgroundPanel({ background, onChange }: BackgroundPanelProps) 
           <ColorField
             label="图案颜色"
             value={background.fg}
-            onChange={(fg) => onChange({ ...background, fg })}
+            onCommit={(fg) => onChange({ ...background, fg })}
           />
           <ColorField
             label="底色"
             value={background.bg}
-            onChange={(bg) => onChange({ ...background, bg })}
+            onCommit={(bg) => onChange({ ...background, bg })}
           />
         </div>
       ) : null}

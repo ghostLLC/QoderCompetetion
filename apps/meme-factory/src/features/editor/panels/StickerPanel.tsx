@@ -45,7 +45,7 @@ export function StickerPanel({ selected, onAdd, onColor }: StickerPanelProps) {
           <ColorField
             label="贴纸颜色"
             value={selected.fill}
-            onChange={onColor}
+            onCommit={onColor}
             disabled={!selectedDef.colorable}
           />
         </div>

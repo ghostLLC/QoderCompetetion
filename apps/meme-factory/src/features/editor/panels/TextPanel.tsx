@@ -94,12 +94,12 @@ export function TextPanel({ element, onUpdate, onAdd }: TextPanelProps) {
             <ColorField
               label="文字颜色"
               value={element.fill}
-              onChange={(fill) => onUpdate({ fill })}
+              onCommit={(fill) => onUpdate({ fill })}
             />
             <ColorField
               label="描边颜色"
               value={element.stroke}
-              onChange={(stroke) => onUpdate({ stroke })}
+              onCommit={(stroke) => onUpdate({ stroke })}
             />
           </div>
 

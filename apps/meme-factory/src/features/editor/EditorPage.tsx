@@ -9,6 +9,7 @@ import { EditorCanvas } from '@/features/editor/EditorCanvas'
 import BackgroundPanel from '@/features/editor/panels/BackgroundPanel'
 import FilterPanel from '@/features/editor/panels/FilterPanel'
 import LayersPanel from '@/features/editor/panels/LayersPanel'
+import { canDuplicateElement } from '@/features/editor/panels/layerRules'
 import StickerPanel from '@/features/editor/panels/StickerPanel'
 import TemplatePanel from '@/features/editor/panels/TemplatePanel'
 import TextPanel from '@/features/editor/panels/TextPanel'
@@ -168,12 +169,15 @@ export function EditorPage() {
         controllerRef.current = null
         usePhotoStore.getState().setPhoto(original, cutout)
         setCutoutRunning(false)
+        // Cutout succeeded: the framed fallback is no longer needed.
         enterEditor(false)
       } catch (error) {
         if (
           controller.signal.aborted ||
           (error instanceof DOMException && error.name === 'AbortError')
         ) {
+          // Aborted runs (navigation/unmount) leave the frame-mode photo that
+          // was created at upload time intact.
           return
         }
         controllerRef.current = null
@@ -203,7 +207,10 @@ export function EditorPage() {
       usePhotoStore.getState().setPhoto(blob, null)
       originalRef.current = blob
 
-      const photo = createPhotoElement(width, height)
+      // Start in frame mode: the cutout can be skipped, fail, or be interrupted
+      // by navigation. Only a successful cutout clears the frame, so a
+      // remounted editor never shows a bare rectangular photo without a badge.
+      const photo = { ...createPhotoElement(width, height), frame: true }
       const text = createTextElement('就这？')
       const base: Scene = { background: { kind: 'none' }, elements: [photo, text] }
       const next = applyTemplate(base, TEMPLATES.classic, text.id)
@@ -299,7 +306,9 @@ export function EditorPage() {
   const duplicateElement = (id: string) => {
     const store = useEditorStore.getState()
     const source = store.scene.elements.find((element) => element.id === id)
-    if (!source) return
+    // Canvas/export read filters from the single photo, so a photo copy would
+    // make filter edits look like a silent no-op.
+    if (!source || !canDuplicateElement(source.type)) return
     const copy = { ...source, id: newId(), x: source.x + 28, y: source.y + 28 } as SceneElement
     store.commit({ ...store.scene, elements: [...store.scene.elements, copy] })
     store.select(copy.id)
