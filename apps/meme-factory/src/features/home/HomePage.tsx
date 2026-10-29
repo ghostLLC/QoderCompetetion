@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { Badge } from '@/components/Badge'
@@ -113,7 +113,7 @@ function HeroPreview() {
         />
       </div>
 
-      <span className="absolute -bottom-4 right-3 -rotate-3 border-[3px] border-ink bg-danger px-2.5 py-1 font-display text-sm font-bold leading-none text-paper shadow-[3px_3px_0_0_var(--color-ink)]">
+      <span className="absolute -bottom-4 right-3 -rotate-3 border-[3px] border-ink bg-danger px-2.5 py-1 font-display text-sm font-bold leading-none text-ink shadow-[3px_3px_0_0_var(--color-ink)]">
         零上传
       </span>
     </div>
@@ -126,9 +126,22 @@ export default function HomePage() {
   const [hasDraft, setHasDraft] = useState(false)
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [sampleError, setSampleError] = useState<string | null>(null)
+  const pendingAbortRef = useRef<AbortController | null>(null)
+  const cancelledRef = useRef(false)
 
   const openAbout = useCallback(() => setAboutOpen(true), [])
   const closeAbout = useCallback(() => setAboutOpen(false), [])
+
+  // Abort an in-flight sample prefetch when the user leaves the page, so a late
+  // response can never pull them into /create after they picked another route.
+  useEffect(() => {
+    cancelledRef.current = false
+    return () => {
+      cancelledRef.current = true
+      pendingAbortRef.current?.abort()
+      pendingAbortRef.current = null
+    }
+  }, [])
 
   // The editor flushes its draft on unmount, so a quick round-trip can beat
   // IndexedDB. Re-check once after the write queue settles.
@@ -152,15 +165,26 @@ export default function HomePage() {
     setPendingId(sample.id)
     setSampleError(null)
     const handoff = toHandoff(sample)
+    const controller = new AbortController()
+    pendingAbortRef.current = controller
+    const isActive = () =>
+      !cancelledRef.current &&
+      pendingAbortRef.current === controller &&
+      !controller.signal.aborted
 
     try {
       // Prefetch into the HTTP cache; EditorPage re-fetches the same URL.
-      const response = await fetch(handoff.url)
+      const response = await fetch(handoff.url, { signal: controller.signal })
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       await response.arrayBuffer()
-      navigate('/create', { state: { sample: handoff } satisfies CreateRouteState })
+      // The user may have navigated away while the bytes were in flight.
+      if (!isActive()) return
+      pendingAbortRef.current = null
       setPendingId(null)
+      navigate('/create', { state: { sample: handoff } satisfies CreateRouteState })
     } catch {
+      if (!isActive()) return
+      pendingAbortRef.current = null
       setPendingId(null)
       setSampleError('示例图没加载出来，检查网络后再点一次，或者直接上传自己的照片。')
     }
@@ -227,7 +251,7 @@ export default function HomePage() {
                   <LockIcon />
                   照片不出你的浏览器
                 </Badge>
-                <span className="text-[11px] font-bold text-ink/55">
+                <span className="text-[11px] font-bold text-ink/70">
                   本地抠图 · 无需登录 · 不埋点
                 </span>
               </div>
@@ -280,7 +304,7 @@ export default function HomePage() {
                   点「拿这个玩玩」，示例照片会直接进入本地抠图流程。玩明白了，再换成你自己的照片。
                 </p>
               </div>
-              <p className="hidden border-b-2 border-ink pb-1 text-xs font-bold text-ink/55 sm:block">
+              <p className="hidden border-b-2 border-ink pb-1 text-xs font-bold text-ink/70 sm:block">
                 3 张 AI 生成样片 · 无版权顾虑
               </p>
             </div>
@@ -331,6 +355,7 @@ export default function HomePage() {
                       onClick={() => void playSample(sample)}
                       disabled={pendingId !== null}
                       aria-busy={pendingId === sample.id}
+                      aria-label={`拿这个玩玩：${sample.title}`}
                       className="mt-auto w-full justify-between px-4 py-3 text-base"
                     >
                       {pendingId === sample.id ? '正在装弹…' : '拿这个玩玩'}

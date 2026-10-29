@@ -10,7 +10,7 @@ const navLink =
   'border-b-2 border-transparent px-2 py-1 text-sm font-bold text-ink underline-offset-4 hover:border-ink ' +
   focusRing
 
-const footerLink = `text-sm font-bold text-ink underline decoration-2 underline-offset-4 hover:bg-alert ${focusRing}`
+const footerLink = `inline-flex min-h-11 items-center text-sm font-bold text-ink underline decoration-2 underline-offset-4 hover:bg-alert sm:min-h-0 ${focusRing}`
 
 export interface LayoutProps {
   onAbout: () => void
@@ -21,6 +21,22 @@ export interface LayoutProps {
 export function Layout({ onAbout, children }: LayoutProps) {
   return (
     <div className="flex min-h-full flex-col overflow-x-clip bg-paper text-ink">
+      {/* Off-screen until keyboard focus; the click handler keeps the
+          HashRouter from treating `#main` as a route change. */}
+      <a
+        href="#main"
+        onClick={(event) => {
+          event.preventDefault()
+          const main = document.getElementById('main')
+          if (!main) return
+          main.focus({ preventScroll: true })
+          main.scrollIntoView()
+        }}
+        className={`fixed left-4 top-4 z-50 -translate-y-[200%] border-[3px] border-ink bg-alert px-4 py-3 font-display text-sm font-bold text-ink shadow-[4px_4px_0_0_var(--color-ink)] focus:translate-y-0 ${focusRing}`}
+      >
+        跳到主要内容
+      </a>
+
       <header className="sticky top-0 z-30 border-b-[3px] border-ink bg-paper">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-2.5 sm:px-6">
           <Link to="/" aria-label="斗图军火库首页" className={`shrink-0 ${focusRing}`}>
@@ -38,13 +54,13 @@ export function Layout({ onAbout, children }: LayoutProps) {
               type="button"
               onClick={onAbout}
               aria-haspopup="dialog"
-              className={navLink}
+              className={`inline-flex min-h-11 items-center sm:min-h-0 ${navLink}`}
             >
               关于
             </button>
             <Link
               to="/create"
-              className={`ml-1 inline-flex items-center border-[3px] border-ink bg-alert px-3 py-2 font-display text-sm font-bold leading-none text-ink shadow-[3px_3px_0_0_var(--color-ink)] transition-transform hover:-translate-y-0.5 active:translate-y-0 active:shadow-none sm:text-base ${focusRing}`}
+              className={`ml-1 inline-flex min-h-11 items-center border-[3px] border-ink bg-alert px-3 py-2 font-display text-sm font-bold leading-none text-ink shadow-[3px_3px_0_0_var(--color-ink)] transition-transform hover:-translate-y-0.5 active:translate-y-0 active:shadow-none sm:text-base ${focusRing}`}
             >
               开造
             </Link>
@@ -52,7 +68,9 @@ export function Layout({ onAbout, children }: LayoutProps) {
         </div>
       </header>
 
-      <main className="flex-1">{children}</main>
+      <main id="main" tabIndex={-1} className="flex-1 scroll-mt-16 focus:outline-none">
+        {children}
+      </main>
 
       <footer className="border-t-[3px] border-ink bg-paper">
         <div className="mx-auto grid w-full max-w-6xl gap-8 px-4 py-10 sm:px-6 md:grid-cols-[1.4fr_1fr_1.1fr]">

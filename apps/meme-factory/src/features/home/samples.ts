@@ -61,22 +61,44 @@ export function toHandoff(sample: SampleDef): SampleHandoff {
   return { id: sample.id, title: sample.title, url: sampleUrl(sample.file) }
 }
 
+const SAMPLE_FILES = new Set(SAMPLES.map((sample) => sample.file))
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 /**
  * Validates router state defensively: history state can be user-edited, so
- * only accept a URL inside this build's own samples directory.
+ * only accept a normalised same-origin URL that resolves to a whitelisted
+ * sample file inside this build's own samples directory.
  */
 export function parseSampleHandoff(state: unknown): SampleHandoff | null {
-  if (!state || typeof state !== 'object') return null
-  const candidate = (state as { sample?: unknown }).sample
-  if (!candidate || typeof candidate !== 'object') return null
+  if (!isRecord(state) || !isRecord(state.sample)) return null
 
-  const { id, title, url } = candidate as Record<string, unknown>
-  if (typeof id !== 'string' || typeof title !== 'string' || typeof url !== 'string') {
+  const { id, title, url } = state.sample
+  if (typeof id !== 'string' || id === '') return null
+  if (typeof title !== 'string' || title === '') return null
+  if (typeof url !== 'string') return null
+
+  let parsed: URL
+  try {
+    parsed = new URL(url, document.baseURI)
+  } catch {
     return null
   }
 
-  const samplesBase = new URL('samples/', document.baseURI).href
-  if (!url.startsWith(samplesBase)) return null
+  const samplesBase = new URL('samples/', document.baseURI)
+  if (parsed.origin !== samplesBase.origin) return null
 
-  return { id, title, url }
+  // The handoff contract always emits a bare file URL; query/hash variants are
+  // not produced by this app and should not be trusted.
+  if (parsed.search !== '' || parsed.hash !== '') return null
+
+  // URL parsing collapses `.`/`..` segments, so traversal cannot sneak past
+  // the whitelist below (`samples/%2e%2e/models/...` becomes `/models/...`).
+  if (!parsed.pathname.startsWith(samplesBase.pathname)) return null
+  const file = parsed.pathname.slice(samplesBase.pathname.length)
+  if (!SAMPLE_FILES.has(file)) return null
+
+  return { id, title, url: parsed.href }
 }

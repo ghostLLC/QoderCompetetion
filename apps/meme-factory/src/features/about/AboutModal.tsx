@@ -88,7 +88,7 @@ export function AboutModal({ open, onClose }: AboutModalProps) {
           </ul>
         </section>
 
-        <p className="border-t-2 border-ink pt-4 text-xs font-bold text-ink/55">
+        <p className="border-t-2 border-ink pt-4 text-xs font-bold text-ink/65">
           2026 Qoder 高校创造力大赛 · LifeHack 赛道参赛作品 · 无账号 · 无上传 · 无水印
         </p>
       </div>
