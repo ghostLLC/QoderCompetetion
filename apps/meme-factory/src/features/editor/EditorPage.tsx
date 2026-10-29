@@ -18,6 +18,8 @@ import { usePhotoAsset } from '@/features/editor/usePhotoAsset'
 import { UploadDropzone } from '@/features/upload/UploadDropzone'
 import { exportSingle } from '@/lib/export'
 import { decodeImage, fitWithin } from '@/lib/image'
+import { parseScene } from '@/lib/serialize'
+import { loadDraft } from '@/lib/storage'
 import {
   createPhotoElement,
   createStickerElement,
@@ -31,6 +33,7 @@ import {
 } from '@/lib/scene'
 import { useEditorStore, type ElementPatch } from '@/store/editorStore'
 import { usePhotoStore } from '@/store/photoStore'
+import { useDraftAutosave } from '@/store/useDraftAutosave'
 
 const PHOTO_MAX_EDGE = 780
 const PANEL_TABS = [
@@ -109,6 +112,7 @@ export function EditorPage() {
 
   const controllerRef = useRef<AbortController | null>(null)
   const originalRef = useRef<Blob | null>(null)
+  const uploadStartedRef = useRef(false)
 
   const scene = useEditorStore((state) => state.scene)
   const selectedId = useEditorStore((state) => state.selectedId)
@@ -116,6 +120,10 @@ export function EditorPage() {
   const futureLength = useEditorStore((state) => state.future.length)
   const photoUrl = usePhotoStore((state) => state.photoUrl)
   const { image: exportImage } = usePhotoAsset()
+
+  // Local drafts only make sense once a photo exists; the hook stays mounted
+  // (hooks can't be conditional) and starts saving when the photo arrives.
+  useDraftAutosave(Boolean(photoUrl))
 
   const selectedElement: SceneElement | null =
     (selectedId ? scene.elements.find((element) => element.id === selectedId) : null) ?? null
@@ -135,6 +143,33 @@ export function EditorPage() {
     return () => {
       controllerRef.current?.abort()
       controllerRef.current = null
+    }
+  }, [])
+
+  // Restore the last local draft on a cold mount. A photo already in the store
+  // means this SPA session has a live upload, which must win over the draft.
+  useEffect(() => {
+    if (usePhotoStore.getState().original) return
+
+    let cancelled = false
+    void (async () => {
+      const draft = await loadDraft()
+      if (cancelled || uploadStartedRef.current) return
+      if (!draft || usePhotoStore.getState().original) return
+
+      const restored = parseScene(draft.sceneJson)
+      if (!restored) return
+
+      usePhotoStore.getState().setPhoto(draft.photo, draft.cutout ?? null)
+      // `reset` also clears selection/history; frame state lives in the scene.
+      useEditorStore.getState().reset(restored)
+      const mainText = restored.elements.find((element) => element.type === 'text')
+      useEditorStore.getState().select(mainText?.id ?? null)
+      setStage('editor')
+    })()
+
+    return () => {
+      cancelled = true
     }
   }, [])
 
@@ -198,6 +233,7 @@ export function EditorPage() {
   )
 
   const handlePhoto = async (blob: Blob) => {
+    uploadStartedRef.current = true
     setUploadError(null)
     try {
       const bitmap = await decodeImage(blob)
