@@ -14,6 +14,8 @@ export type RemoveBackgroundOptions = {
 
 export const MODEL_CACHE = 'meme-arsenal-model-v1'
 export const MODEL_SIZE = 320
+/** Exact byte length of the self-hosted u2netp.onnx binary. */
+export const MODEL_BYTES = 4_574_861
 
 const MEAN = [0.485, 0.456, 0.406] as const
 const STD = [0.229, 0.224, 0.225] as const
@@ -24,6 +26,19 @@ const abortError = () => new DOMException('抠图已取消', 'AbortError')
 
 function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) throw abortError()
+}
+
+/**
+ * Reject anything that is not the exact u2netp binary: a 200 HTML SPA
+ * fallback, a truncated download or a corrupt cache entry would otherwise be
+ * handed to onnxruntime and fail with an opaque error.
+ */
+export function assertModelSize(byteLength: number): void {
+  if (byteLength !== MODEL_BYTES) {
+    throw new Error(
+      `模型文件大小异常（期望 ${MODEL_BYTES} 字节，实际 ${byteLength} 字节），请清除缓存后重试`,
+    )
+  }
 }
 
 /** RGBA pixels -> CHW float32 tensor normalized with ImageNet mean/std. */
@@ -69,6 +84,14 @@ async function readCachedModel(): Promise<ArrayBuffer | null> {
     const hit = await cache.match(modelUrl())
     if (!hit) return null
     const buffer = await hit.arrayBuffer()
+    try {
+      assertModelSize(buffer.byteLength)
+    } catch {
+      // Corrupt or truncated cache entry: evict it so the next call re-downloads.
+      memoryModel = null
+      await cache.delete(modelUrl())
+      return null
+    }
     memoryModel = buffer
     return buffer
   } catch {
@@ -101,6 +124,7 @@ async function downloadModel(
   const reader = response.body?.getReader()
   if (!reader) {
     const buffer = await response.arrayBuffer()
+    assertModelSize(buffer.byteLength)
     onProgress?.({ stage: 'download', percent: 100 })
     return buffer
   }
@@ -128,6 +152,7 @@ async function downloadModel(
     merged.set(chunk, offset)
     offset += chunk.byteLength
   }
+  assertModelSize(merged.byteLength)
   onProgress?.({ stage: 'download', percent: 100 })
   return merged.buffer
 }
@@ -183,6 +208,10 @@ function loadOrt(): Promise<OrtModule> {
       ort.env.wasm.numThreads = 1
       return ort
     })
+    // A transient import/env failure must not poison cutout for the page lifetime.
+    ortPromise.catch(() => {
+      ortPromise = null
+    })
   }
   return ortPromise
 }
@@ -198,6 +227,10 @@ async function getSession(
     sessionPromise = ort.InferenceSession.create(new Uint8Array(buffer), {
       executionProviders: ['wasm'],
       graphOptimizationLevel: 'all',
+    })
+    // Retry session creation on the next call instead of caching the rejection.
+    sessionPromise.catch(() => {
+      sessionPromise = null
     })
   }
   return { ort, session: await sessionPromise }
