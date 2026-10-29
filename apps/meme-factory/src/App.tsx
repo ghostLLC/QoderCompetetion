@@ -1,4 +1,5 @@
 import { HashRouter, Route, Routes } from 'react-router-dom'
+import EditorPage from '@/features/editor/EditorPage'
 
 function HomePage() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
     <HashRouter>
       <Routes>
         <Route path="/" element={<HomePage />} />
+        <Route path="/create" element={<EditorPage />} />
       </Routes>
     </HashRouter>
   )

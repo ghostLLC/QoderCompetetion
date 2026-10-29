@@ -1,7 +1,10 @@
 import { create } from 'zustand'
-import { emptyScene, type Scene } from '@/lib/scene'
+import { emptyScene, type Scene, type SceneElement } from '@/lib/scene'
 
 const HISTORY_LIMIT = 50
+
+/** Style/property patch accepted by `updateSelected`; identity is preserved. */
+export type ElementPatch = Partial<SceneElement>
 
 export interface EditorState {
   scene: Scene
@@ -9,13 +12,15 @@ export interface EditorState {
   past: Scene[]
   future: Scene[]
   commit: (next: Scene) => void
+  /** Merges `patch` into the selected element as one undoable commit. */
+  updateSelected: (patch: ElementPatch) => void
   undo: () => void
   redo: () => void
   select: (id: string | null) => void
   reset: (scene: Scene) => void
 }
 
-export const useEditorStore = create<EditorState>()((set) => ({
+export const useEditorStore = create<EditorState>()((set, get) => ({
   scene: emptyScene(),
   selectedId: null,
   past: [],
@@ -27,6 +32,25 @@ export const useEditorStore = create<EditorState>()((set) => ({
       past: [...state.past, state.scene].slice(-HISTORY_LIMIT),
       future: [],
     })),
+
+  updateSelected: (patch) => {
+    const { scene, selectedId, commit } = get()
+    if (!selectedId) return
+
+    const index = scene.elements.findIndex((element) => element.id === selectedId)
+    const current = scene.elements[index]
+    if (index < 0 || !current) return
+
+    const elements = scene.elements.slice()
+    // Identity fields stay owned by the scene even if a caller passes them.
+    elements[index] = {
+      ...current,
+      ...patch,
+      id: current.id,
+      type: current.type,
+    } as SceneElement
+    commit({ ...scene, elements })
+  },
 
   undo: () =>
     set((state) => {
