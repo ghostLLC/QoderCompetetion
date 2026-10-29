@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 import { getSticker } from '@/data/stickers'
 import { TEMPLATES, type TemplateId } from '@/data/templates'
@@ -15,6 +15,7 @@ import TemplatePanel from '@/features/editor/panels/TemplatePanel'
 import TextPanel from '@/features/editor/panels/TextPanel'
 import { focusRing } from '@/features/editor/panels/controls'
 import { usePhotoAsset } from '@/features/editor/usePhotoAsset'
+import { parseSampleHandoff } from '@/features/home/samples'
 import { UploadDropzone } from '@/features/upload/UploadDropzone'
 import { exportSingle } from '@/lib/export'
 import { decodeImage, fitWithin } from '@/lib/image'
@@ -96,7 +97,15 @@ function PanelTabs({
 }
 
 export function EditorPage() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  // A sample handoff from the home page: validated once per location change.
+  const sampleHandoff = useMemo(() => parseSampleHandoff(location.state), [location.state])
+
   const [stage, setStage] = useState<Stage>(() => {
+    // A fresh sample always starts the upload flow, even when this SPA session
+    // still holds an older edited scene.
+    if (sampleHandoff) return 'upload'
     const hasPhoto = Boolean(usePhotoStore.getState().photoUrl)
     const hasScene = useEditorStore.getState().scene.elements.length > 0
     return hasPhoto && hasScene ? 'editor' : 'upload'
@@ -107,12 +116,17 @@ export function EditorPage() {
   const [cutoutError, setCutoutError] = useState<string | null>(null)
   const [cutoutRunning, setCutoutRunning] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [sampleLoading, setSampleLoading] = useState(Boolean(sampleHandoff))
   const [exportNote, setExportNote] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
 
   const controllerRef = useRef<AbortController | null>(null)
   const originalRef = useRef<Blob | null>(null)
-  const uploadStartedRef = useRef(false)
+  // Seeded from the handoff so the mount-time draft restore is skipped while
+  // the sample is still downloading.
+  const uploadStartedRef = useRef(Boolean(sampleHandoff))
+  const sampleConsumedRef = useRef(false)
+  const mountedRef = useRef(true)
 
   const scene = useEditorStore((state) => state.scene)
   const selectedId = useEditorStore((state) => state.selectedId)
@@ -140,7 +154,9 @@ export function EditorPage() {
   const stickerElement = selectedElement?.type === 'sticker' ? selectedElement : null
 
   useEffect(() => {
+    mountedRef.current = true
     return () => {
+      mountedRef.current = false
       controllerRef.current?.abort()
       controllerRef.current = null
     }
@@ -232,33 +248,67 @@ export function EditorPage() {
     [enterEditor],
   )
 
-  const handlePhoto = async (blob: Blob) => {
-    uploadStartedRef.current = true
+  const handlePhoto = useCallback(
+    async (blob: Blob) => {
+      uploadStartedRef.current = true
+      setUploadError(null)
+      try {
+        const bitmap = await decodeImage(blob)
+        const { width, height } = fitWithin(bitmap.width, bitmap.height, PHOTO_MAX_EDGE)
+        bitmap.close()
+
+        usePhotoStore.getState().setPhoto(blob, null)
+        originalRef.current = blob
+
+        // Start in frame mode: the cutout can be skipped, fail, or be interrupted
+        // by navigation. Only a successful cutout clears the frame, so a
+        // remounted editor never shows a bare rectangular photo without a badge.
+        const photo = { ...createPhotoElement(width, height), frame: true }
+        const text = createTextElement('就这？')
+        const base: Scene = { background: { kind: 'none' }, elements: [photo, text] }
+        const next = applyTemplate(base, TEMPLATES.classic, text.id)
+        useEditorStore.getState().reset(next)
+        setActiveTemplate('classic')
+        setStage('cutout')
+        void runCutout(blob)
+      } catch {
+        usePhotoStore.getState().clear()
+        setUploadError('照片处理失败，请换一张试试')
+      }
+    },
+    [runCutout],
+  )
+
+  // One-click sample handoff from the home page. The state only carries the
+  // sample URL; we re-fetch here, then reuse the normal upload→cutout pipeline.
+  // Intentionally no cleanup abort: StrictMode remounts effects, and a
+  // cancelled first run would leave the guarded handoff half-consumed.
+  useEffect(() => {
+    if (!sampleHandoff || sampleConsumedRef.current) return
+    sampleConsumedRef.current = true
+
+    // Drop the state from history so refresh/back opens the plain uploader
+    // instead of replaying the sample.
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: null })
+    setSampleLoading(true)
     setUploadError(null)
-    try {
-      const bitmap = await decodeImage(blob)
-      const { width, height } = fitWithin(bitmap.width, bitmap.height, PHOTO_MAX_EDGE)
-      bitmap.close()
 
-      usePhotoStore.getState().setPhoto(blob, null)
-      originalRef.current = blob
-
-      // Start in frame mode: the cutout can be skipped, fail, or be interrupted
-      // by navigation. Only a successful cutout clears the frame, so a
-      // remounted editor never shows a bare rectangular photo without a badge.
-      const photo = { ...createPhotoElement(width, height), frame: true }
-      const text = createTextElement('就这？')
-      const base: Scene = { background: { kind: 'none' }, elements: [photo, text] }
-      const next = applyTemplate(base, TEMPLATES.classic, text.id)
-      useEditorStore.getState().reset(next)
-      setActiveTemplate('classic')
-      setStage('cutout')
-      void runCutout(blob)
-    } catch {
-      usePhotoStore.getState().clear()
-      setUploadError('照片处理失败，请换一张试试')
-    }
-  }
+    void (async () => {
+      try {
+        const response = await fetch(sampleHandoff.url)
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        const blob = await response.blob()
+        if (!mountedRef.current) return
+        await handlePhoto(blob)
+      } catch {
+        if (mountedRef.current) {
+          setUploadError('示例图加载失败，请上传自己的照片')
+        }
+      } finally {
+        if (mountedRef.current) setSampleLoading(false)
+      }
+    })()
+  }, [sampleHandoff, location.pathname, location.search, navigate, handlePhoto])
 
   const stopCutout = () => {
     controllerRef.current?.abort()
@@ -526,7 +576,20 @@ export function EditorPage() {
             <h2 className="font-display text-3xl font-bold">先来一张照片</h2>
             <p className="mt-1 text-sm text-ink/70">全程本地处理，照片不会上传</p>
           </div>
-          <UploadDropzone onPhoto={(blob) => void handlePhoto(blob)} />
+          {sampleLoading ? (
+            <div
+              role="status"
+              className="border-[3px] border-ink bg-paper p-5 shadow-[4px_4px_0_0_var(--color-ink)]"
+            >
+              <p className="font-display text-xl font-bold">正在装入示例照片…</p>
+              <p className="mt-1 text-sm text-ink/60">从本站读取，不会上传。</p>
+              <div className="mt-4 h-3 w-full border-2 border-ink bg-paper">
+                <div className="h-full w-2/3 animate-pulse bg-alert" />
+              </div>
+            </div>
+          ) : (
+            <UploadDropzone onPhoto={(blob) => void handlePhoto(blob)} />
+          )}
           {uploadError ? (
             <p role="alert" className="border-2 border-danger bg-danger/10 px-3 py-2 text-sm font-bold">
               {uploadError}

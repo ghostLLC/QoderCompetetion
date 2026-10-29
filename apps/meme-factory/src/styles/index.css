@@ -17,4 +17,26 @@
 }
 
 html, body, #root { height: 100%; }
-body { background: var(--color-paper); color: var(--color-ink); }
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  overflow-x: clip;
+}
+
+::selection {
+  background: var(--color-alert);
+  color: var(--color-ink);
+}
+
+/* Halftone dot field used behind the hero and around sticker cards. */
+@utility halftone {
+  background-image: radial-gradient(circle, rgb(17 17 17 / 0.26) 1.1px, transparent 1.4px);
+  background-size: 12px 12px;
+}
+
+/* Alert-yellow dot field for dark surfaces. */
+@utility halftone-alert {
+  background-image: radial-gradient(circle, rgb(232 255 0 / 0.55) 1.2px, transparent 1.5px);
+  background-size: 10px 10px;
+}
+
