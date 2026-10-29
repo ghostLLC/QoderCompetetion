@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
-import type { ChangeEvent, DragEvent, KeyboardEvent, MouseEvent } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
+import type { ChangeEvent, DragEvent, KeyboardEvent } from 'react'
 import { decodeImage, toScaledBlob, validateFile } from '@/lib/image'
 
 const MAX_DIMENSION = 1600
+const ACCEPT = 'image/jpeg,image/png,image/webp'
+const PIPELINE_ERROR = '图片解析失败，请换一张试试'
 
 export interface UploadDropzoneProps {
   onPhoto: (blob: Blob) => void
@@ -26,58 +28,82 @@ function CameraIcon() {
   )
 }
 
+const focusRing =
+  'focus-visible:ring-4 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper focus-visible:outline-none'
+
+async function decodeAndDownscale(file: Blob): Promise<Blob> {
+  const bitmap = await decodeImage(file)
+  try {
+    return await toScaledBlob(bitmap, MAX_DIMENSION)
+  } finally {
+    bitmap.close()
+  }
+}
+
 export function UploadDropzone({ onPhoto }: UploadDropzoneProps) {
-  const inputRef = useRef<HTMLInputElement>(null)
+  const galleryInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
+  const requestIdRef = useRef(0)
+  const hintId = useId()
   const [dragging, setDragging] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
 
   useEffect(() => {
+    const url = preview
     return () => {
-      if (preview) URL.revokeObjectURL(preview)
+      if (url) URL.revokeObjectURL(url)
     }
   }, [preview])
 
-  const openPicker = () => inputRef.current?.click()
+  const openGallery = () => galleryInputRef.current?.click()
+  const openCamera = () => cameraInputRef.current?.click()
 
   const acceptFile = async (file: File) => {
+    const requestId = ++requestIdRef.current
+    const isLatest = () => requestId === requestIdRef.current
+
     const result = validateFile(file)
     if (!result.ok) {
       setError(result.reason)
       setPreview(null)
+      setBusy(false)
+      return
+    }
+
+    let previewUrl: string
+    try {
+      previewUrl = URL.createObjectURL(file)
+    } catch {
+      setError(PIPELINE_ERROR)
+      setPreview(null)
+      setBusy(false)
       return
     }
 
     setError(null)
+    setPreview(previewUrl)
     setBusy(true)
-    setPreview(URL.createObjectURL(file))
+
+    let blob: Blob | null = null
+    try {
+      blob = await decodeAndDownscale(file)
+    } catch {
+      if (isLatest()) {
+        setError(PIPELINE_ERROR)
+        setPreview(null)
+        setBusy(false)
+      }
+      return
+    }
+
+    if (!isLatest() || !blob) return
 
     try {
-      const bitmap = await decodeImage(file)
-      try {
-        const blob = await toScaledBlob(bitmap, MAX_DIMENSION)
-        onPhoto(blob)
-      } finally {
-        bitmap.close()
-      }
-    } catch {
-      setError('图片解析失败，请换一张试试')
-      setPreview(null)
+      onPhoto(blob)
     } finally {
-      setBusy(false)
-    }
-  }
-
-  const handleClick = (event: MouseEvent<HTMLDivElement>) => {
-    if (event.target instanceof HTMLInputElement) return
-    openPicker()
-  }
-
-  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault()
-      openPicker()
+      if (isLatest()) setBusy(false)
     }
   }
 
@@ -85,6 +111,15 @@ export function UploadDropzone({ onPhoto }: UploadDropzoneProps) {
     const file = event.target.files?.[0]
     event.target.value = ''
     if (file) void acceptFile(file)
+  }
+
+  const handleKeyDown = (
+    open: () => void,
+    event: KeyboardEvent<HTMLButtonElement>,
+  ) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    event.preventDefault()
+    open()
   }
 
   const handleDragEnter = (event: DragEvent<HTMLDivElement>) => {
@@ -98,8 +133,12 @@ export function UploadDropzone({ onPhoto }: UploadDropzoneProps) {
   }
 
   const handleDragLeave = (event: DragEvent<HTMLDivElement>) => {
-    const next = event.relatedTarget as Node | null
-    if (next && event.currentTarget.contains(next)) return
+    const next = event.relatedTarget
+    if (next instanceof Node && event.currentTarget.contains(next)) return
+    setDragging(false)
+  }
+
+  const handleDragEnd = () => {
     setDragging(false)
   }
 
@@ -111,49 +150,57 @@ export function UploadDropzone({ onPhoto }: UploadDropzoneProps) {
   }
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      aria-label="上传照片"
-      aria-busy={busy || undefined}
-      data-dragging={dragging ? 'true' : undefined}
-      onClick={handleClick}
-      onKeyDown={handleKeyDown}
-      onDragEnter={handleDragEnter}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-      className={`flex w-full cursor-pointer flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed border-ink bg-paper p-6 text-center transition-colors select-none focus-visible:ring-4 focus-visible:ring-ink/30 focus-visible:outline-none ${
-        dragging ? 'border-solid bg-alert/20' : ''
-      }`}
-    >
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/jpeg,image/png,image/webp"
-        capture="environment"
-        aria-label="选择照片"
-        tabIndex={-1}
-        className="sr-only"
-        onChange={handleChange}
-      />
+    <div className="flex w-full flex-col gap-3">
+      <div
+        data-testid="dropzone"
+        aria-busy={busy || undefined}
+        data-dragging={dragging ? 'true' : undefined}
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDragEnd={handleDragEnd}
+        onDrop={handleDrop}
+        className={`flex w-full flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed border-ink bg-paper p-6 text-center transition-colors select-none ${
+          dragging ? 'border-solid bg-alert/20' : ''
+        }`}
+      >
+        <button
+          type="button"
+          aria-describedby={hintId}
+          onClick={openGallery}
+          onKeyDown={(event) => handleKeyDown(openGallery, event)}
+          className={`rounded-xl ${focusRing}`}
+        >
+          <span className="inline-flex -rotate-2 items-center gap-2 border-2 border-ink bg-alert px-4 py-2 font-display text-xl font-bold text-ink shadow-[4px_4px_0_0_var(--color-ink)]">
+            <CameraIcon />
+            把照片拖进来
+          </span>
+        </button>
 
-      <span className="inline-flex -rotate-2 items-center gap-2 border-2 border-ink bg-alert px-4 py-2 font-display text-xl font-bold text-ink shadow-[4px_4px_0_0_var(--color-ink)]">
-        <CameraIcon />
-        把照片拖进来
-      </span>
+        <p id={hintId} className="text-sm text-ink/60">
+          从相册选择 / 拖进来 · JPG / PNG / WebP · 最大 20MB
+        </p>
 
-      <p className="text-sm text-ink/60">或点击选择照片 · JPG / PNG / WebP · 最大 20MB</p>
+        <button
+          type="button"
+          onClick={openCamera}
+          onKeyDown={(event) => handleKeyDown(openCamera, event)}
+          className={`inline-flex items-center gap-2 rounded-xl border-2 border-ink bg-paper px-3 py-1.5 text-sm font-bold text-ink shadow-[2px_2px_0_0_var(--color-ink)] ${focusRing}`}
+        >
+          <CameraIcon />
+          拍照
+        </button>
 
-      {preview ? (
-        <img
-          src={preview}
-          alt="已选照片预览"
-          className="h-28 w-28 rounded-xl border-2 border-ink object-cover"
-        />
-      ) : null}
+        {preview ? (
+          <img
+            src={preview}
+            alt="已选照片预览"
+            className="h-28 w-28 rounded-xl border-2 border-ink object-cover"
+          />
+        ) : null}
+      </div>
 
-      <p aria-live="polite" className="min-h-5 text-sm font-bold text-ink/70">
+      <p role="status" className="min-h-5 text-sm font-bold text-ink/70">
         {busy ? '正在处理照片…' : ''}
       </p>
 
@@ -165,6 +212,28 @@ export function UploadDropzone({ onPhoto }: UploadDropzoneProps) {
           {error}
         </p>
       ) : null}
+
+      <input
+        data-testid="gallery-input"
+        ref={galleryInputRef}
+        type="file"
+        accept={ACCEPT}
+        aria-hidden="true"
+        tabIndex={-1}
+        className="sr-only"
+        onChange={handleChange}
+      />
+      <input
+        data-testid="camera-input"
+        ref={cameraInputRef}
+        type="file"
+        accept={ACCEPT}
+        capture="environment"
+        aria-hidden="true"
+        tabIndex={-1}
+        className="sr-only"
+        onChange={handleChange}
+      />
     </div>
   )
 }
