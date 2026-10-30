@@ -60,10 +60,11 @@ M1 冒烟通过：静态 Vite 产物可发布、公开访问、资源加载正�
 
 ### 最终指标
 
-- 测试：`npm run test` 共 20 个文件、**182 个测试全部通过**（最终修复波后）；`npm run build`（tsc -b + vite build）通过。- Lighthouse（本地 dev）：首页与编辑台无障碍均为 **100**；首页 LCP **约 0.7 s**（743 ms，无节流；dev server，非生产托管），CLS 0.03。
-- 体积：入口 JS `index-*.js` 695.47 kB raw / **216.74 kB gzip**；ORT 与 JSZip 是独立懒加载 chunk，不在 `index.html` 首屏引用。
+- 测试：`npm run test` 共 20 个文件、**182 个测试全部通过**（最终修复波后）；`npm run build`（tsc -b + vite build）通过。
+- Lighthouse（本地 dev）：首页与编辑台无障碍均为 **100**；首页 LCP **约 0.7 s**（743 ms，无节流；dev server，非生产托管），CLS 0.03。
+- 体积：最终入口 JS `index-DpR1IHvO.js` 683.66 kB raw / **211.24 kB gzip**；`dist` 合计 **19 MB**；ORT 与 JSZip 是独立懒加载 chunk，不在 `index.html` 首屏引用。
 - 抠图资产：改用 `onnxruntime-web/wasm` 入口后，构建不再产出 23.9 MB 的 JSEP WASM（约 24 MB 死资产），抠图实际加载的 ORT WASM + 模型合计约 17 MB。
-- 最终部署：<https://meme-arsenal-h9ls3oya5li.qoder.zone>（2026-10-29，public，匿名访问已验证）；线上首页截图 `docs/assets/final-live-home.png`。
+- 最终部署：<https://meme-arsenal-h9ls3oya5li.qoder.zone>（2026-10-29 首次发布，2026-10-30 修复波后重新发布，public，匿名访问已验证）；线上首页截图 `docs/assets/final-live-home.png`。
 - 验收明细：`docs/assets/qa-checklist.md`（其中真机测试为已知限制，未声称通过）。
 
 ### Qoder Sites 限制观察（M5 复查）

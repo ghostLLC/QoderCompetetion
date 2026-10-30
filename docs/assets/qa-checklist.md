@@ -28,4 +28,4 @@ Legend: PASS = verified with the evidence listed. UNVERIFIED = not verified in t
 ## Test / build
 
 - `npm run test`: 20 files, 182 tests passed (after the final-review fix wave).
-- `npm run build`: passed (tsc + vite); entry `dist/assets/index-CsWIGt6A.js` 695.47 kB raw / 216.74 kB gzip; ORT and JSZip are separate lazy chunks (not referenced by `dist/index.html`).
+- `npm run build`: passed (tsc + vite); final entry `dist/assets/index-DpR1IHvO.js` 683.66 kB raw / 211.24 kB gzip; `dist` total 19 MB; ORT and JSZip are separate lazy chunks (not referenced by `dist/index.html`), and the 23.9 MB JSEP WASM is no longer emitted.
