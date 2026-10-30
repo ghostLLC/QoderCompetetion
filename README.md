@@ -50,7 +50,7 @@ docs/
 cd apps/meme-factory
 npm install
 npm run dev          # http://localhost:5173
-npm run test         # Vitest（172 tests）
+npm run test         # Vitest（182 tests）
 npm run build        # tsc + vite build
 npm run fetch-model  # 重新下载 u2netp（可选，模型已提交）
 ```

@@ -27,5 +27,5 @@ Legend: PASS = verified with the evidence listed. UNVERIFIED = not verified in t
 
 ## Test / build
 
-- `npm run test`: 20 files, 172 tests passed.
+- `npm run test`: 20 files, 182 tests passed (after the final-review fix wave).
 - `npm run build`: passed (tsc + vite); entry `dist/assets/index-CsWIGt6A.js` 695.47 kB raw / 216.74 kB gzip; ORT and JSZip are separate lazy chunks (not referenced by `dist/index.html`).

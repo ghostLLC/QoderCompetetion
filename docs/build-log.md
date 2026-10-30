@@ -60,8 +60,7 @@ M1 冒烟通过：静态 Vite 产物可发布、公开访问、资源加载正�
 
 ### 最终指标
 
-- 测试：`npm run test` 共 20 个文件、**172 个测试全部通过**；`npm run build`（tsc -b + vite build）通过。
-- Lighthouse（本地 dev）：首页与编辑台无障碍均为 **100**；首页 LCP **约 0.7 s**（743 ms，无节流；dev server，非生产托管），CLS 0.03。
+- 测试：`npm run test` 共 20 个文件、**182 个测试全部通过**（最终修复波后）；`npm run build`（tsc -b + vite build）通过。- Lighthouse（本地 dev）：首页与编辑台无障碍均为 **100**；首页 LCP **约 0.7 s**（743 ms，无节流；dev server，非生产托管），CLS 0.03。
 - 体积：入口 JS `index-*.js` 695.47 kB raw / **216.74 kB gzip**；ORT 与 JSZip 是独立懒加载 chunk，不在 `index.html` 首屏引用。
 - 抠图资产：改用 `onnxruntime-web/wasm` 入口后，构建不再产出 23.9 MB 的 JSEP WASM（约 24 MB 死资产），抠图实际加载的 ORT WASM + 模型合计约 17 MB。
 - 最终部署：<https://meme-arsenal-h9ls3oya5li.qoder.zone>（2026-10-29，public，匿名访问已验证）；线上首页截图 `docs/assets/final-live-home.png`。
@@ -78,3 +77,16 @@ M1 冒烟通过：静态 Vite 产物可发布、公开访问、资源加载正�
 
 - **字号范围**：规格写 12–96 px，实际滑杆为 **24–120 px**。这是有意决定：低于 24 px 在手机上不可读，96 px 对封面主文案上限偏低；导出仍受 1080 画布与自动缩放约束。该偏差在文字面板代码注释中同样标注。
 - 真机 iOS/Android 未测试（软键盘、Safari Canvas 滤镜、ZIP 下载），已在 `docs/assets/qa-checklist.md` 标为已知限制，不声称通过。
+
+## 2026-10-30 · 最终审查修复波与重新发布
+
+全分支审查给出 "With fixes"，据此完成一轮修复并重新发布：
+
+- **换照片 / 重新抠图 / 全新开始**：编辑器新增「换照片」（清空当前编辑与本地草稿）和「重新抠图」（相框模式或未抠图时可用）；首页主 CTA 以 `{fresh:true}` 进入全新流程，示例替换草稿前会确认。
+- **移动端选中框**：Transformer 手柄改为 16px（触屏）/10px（鼠标）+ 外扩 padding，进入编辑器不再自动选中文字，避免手柄遮挡短文案；透明背景预览显示棋盘格。
+- **抠图体积**：改用 `onnxruntime-web/wasm` 入口，构建不再产出 23.9 MB JSEP WASM；`dist` 从约 43 MB 降至 **19 MB**，线上首抠实际加载模型 + 运行时约 17 MB，并新增「正在加载推理引擎」阶段。
+- **整套页**：无照片时自动恢复草稿或使用内置示例生成 demo（横幅「当前是示例照片」+「换成我的照片」）；ZIP 改为先生成再点击下载；`使用说明.txt` 写入线上地址；缩略图透明背景显示棋盘格。
+- **控件与可达性**：补齐照片水平翻转、文字左/中/右对齐；整套页/上传页触控目标补到 ≥44px；示例加载失败提示对比度修正；画布可聚焦后用方向键微调。
+- **验证**：182 个测试、`tsc -b`、`npm run build`、oxlint 全部通过；本地与线上均重新验证「示例 → 抠图 → 编辑 → 导出」以及「整套 → ZIP（11 项，1080×1080）」；线上控制台无错误（仅 SharedArrayBuffer/COOP 提示）。
+- **重新发布**：Qoder Sites action `9f5b702f-29a1-4b23-95ae-fe97f2deb67d`，publish operation `01a18b1e-88a9-7ed1-92fd-bf0317174c67` 已 committed；<https://meme-arsenal-h9ls3oya5li.qoder.zone> 匿名访问正常。
+- **仍未覆盖**：真机软键盘与 Safari 实测；单标签页写入假设（跨标签草稿为 last-writer-wins）；浏览器拦截多文件下载时无法感知（文案已改为「已发起」）。
