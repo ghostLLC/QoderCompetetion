@@ -91,3 +91,5 @@ M1 冒烟通过：静态 Vite 产物可发布、公开访问、资源加载正�
 - **验证**：182 个测试、`tsc -b`、`npm run build`、oxlint 全部通过；本地与线上均重新验证「示例 → 抠图 → 编辑 → 导出」以及「整套 → ZIP（11 项，1080×1080）」；线上控制台无错误（仅 SharedArrayBuffer/COOP 提示）。
 - **重新发布**：Qoder Sites action `9f5b702f-29a1-4b23-95ae-fe97f2deb67d`，publish operation `01a18b1e-88a9-7ed1-92fd-bf0317174c67` 已 committed；<https://meme-arsenal-h9ls3oya5li.qoder.zone> 匿名访问正常。
 - **仍未覆盖**：真机软键盘与 Safari 实测；单标签页写入假设（跨标签草稿为 last-writer-wins）；浏览器拦截多文件下载时无法感知（文案已改为「已发起」）。
+
+- **2026-10-30 天池作品帖已提交（审核中）**：<https://tianchi.aliyun.com/forum/post/1091458>；审核通过后公开链接通常为 `https://tianchi.aliyun.com/forum/postDetail?postId=1091458`。
