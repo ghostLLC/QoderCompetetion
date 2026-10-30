@@ -6,6 +6,8 @@ import type { Scene } from '@/lib/scene'
 
 /** Readme entry written next to the PNGs. */
 export const ZIP_README_FILENAME = '使用说明.txt'
+/** Public app URL, printed in the readme so a shared folder can be traced back. */
+export const ZIP_LIVE_URL = 'https://meme-arsenal-h9ls3oya5li.qoder.zone'
 /** Rendering fills the first 80% of the reported progress, zipping the rest. */
 const RENDER_PROGRESS_SHARE = 80
 
@@ -38,6 +40,7 @@ export function buildReadme(
     '2. 每张图按当前主题和文案生成，换文案后单独下载即可。',
     '',
     '隐私说明：所有图片都在你的浏览器本地生成，照片不会上传到任何服务器。',
+    `在线体验：${ZIP_LIVE_URL}`,
     `生成日期：${formatDate(date)}`,
     '',
   ].join('\n')

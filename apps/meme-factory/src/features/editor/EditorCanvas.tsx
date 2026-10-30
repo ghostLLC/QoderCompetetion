@@ -12,6 +12,7 @@ import {
 } from 'react-konva'
 
 import { getSticker } from '@/data/stickers'
+import { focusRing } from '@/features/editor/panels/controls'
 import { textNodeBox } from '@/features/editor/textNodeBox'
 import type { TextFrame } from '@/features/editor/textNodeBox'
 import { useMediaQuery } from '@/features/editor/useMediaQuery'
@@ -37,10 +38,22 @@ const MIN_ELEMENT_SIZE = 40
 const NUDGE_STEP = 2
 const SHIFT_NUDGE_STEP = 10
 const NODE_ID_PREFIX = 'element-'
-// Transformer handles render in screen pixels, not design units, so these are
-// used as-is: 22px touch targets, compact mouse handles.
-const TOUCH_ANCHOR_SIZE = 22
-const POINTER_ANCHOR_SIZE = 12
+// Transformer handles render in screen pixels, not design units. Touch handles
+// stay compact (16px) because a short caption is only ~30px tall; padding keeps
+// them off the text itself. Mouse handles can be smaller still.
+const TOUCH_ANCHOR_SIZE = 16
+const POINTER_ANCHOR_SIZE = 10
+const TOUCH_TRANSFORMER_PADDING = 14
+const POINTER_TRANSFORMER_PADDING = 6
+
+// Transparent exports show the bare alpha channel; mirror that in the editor so
+// "no background" never looks like opaque paper. Purely cosmetic, never exported.
+const TRANSPARENT_CHECKER_STYLE = {
+  backgroundColor: 'var(--color-paper)',
+  backgroundImage:
+    'repeating-conic-gradient(rgb(17 17 17 / 0.07) 0% 25%, transparent 0% 50%)',
+  backgroundSize: '16px 16px',
+}
 
 const BACKGROUND_ASSETS: RenderAssets = {
   photo: null,
@@ -336,12 +349,15 @@ export function EditorCanvas() {
     const summary =
       names.length > 0 ? `共${names.length}个图层：${names.join('、')}` : '暂无图层'
     const selected = selectedElement ? `。当前选中${elementName(selectedElement)}` : ''
-    return `表情包画布，${DESIGN_SIZE}×${DESIGN_SIZE}，${backgroundName(scene.background)}，${summary}${selected}。方向键微调选中元素，Delete 删除。`
+    return `表情包画布，${DESIGN_SIZE}×${DESIGN_SIZE}，${backgroundName(scene.background)}，${summary}${selected}。按 Tab 聚焦画布后，方向键微调选中元素，Delete 删除。`
   }, [scene, selectedElement])
 
   // Konva draws transformer handles at a constant screen size (the layer scale
-  // does not apply to the anchors), so touch handles stay 22px on a phone.
+  // does not apply to the anchors), so touch handles stay 16px on a phone.
   const anchorSize = coarsePointer ? TOUCH_ANCHOR_SIZE : POINTER_ANCHOR_SIZE
+  const transformerPadding = coarsePointer
+    ? TOUCH_TRANSFORMER_PADDING
+    : POINTER_TRANSFORMER_PADDING
   const anchorStrokeWidth = 2
 
   const dismissSelection = useCallback(() => {
@@ -351,9 +367,14 @@ export function EditorCanvas() {
   return (
     <div
       ref={containerRef}
-      className="relative aspect-square w-full touch-none select-none"
+      className={`relative aspect-square w-full touch-none select-none ${focusRing}`}
+      style={scene.background.kind === 'none' ? TRANSPARENT_CHECKER_STYLE : undefined}
       role="img"
+      tabIndex={0}
       aria-label={canvasDescription}
+      // Pointer users land on the canvas directly, so the arrow/Delete handlers
+      // are reachable without tabbing through the whole toolbar first.
+      onPointerDown={() => containerRef.current?.focus({ preventScroll: true })}
     >
       <Stage
         ref={stageRef}
@@ -551,6 +572,7 @@ export function EditorCanvas() {
             keepRatio={keepRatio}
             flipEnabled={false}
             ignoreStroke
+            padding={transformerPadding}
             anchorSize={anchorSize}
             anchorStrokeWidth={anchorStrokeWidth}
             anchorStroke="#111111"

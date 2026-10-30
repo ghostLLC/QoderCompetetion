@@ -1,33 +1,56 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 
 import { PACKS, type PackDef, type PackId } from '@/data/packs'
 import { TEMPLATES } from '@/data/templates'
+import { applyTemplate } from '@/features/editor/applyTemplate'
 import { focusRing } from '@/features/editor/panels/controls'
 import { buildPackScene } from '@/features/packs/buildPackScene'
 import { PackGrid } from '@/features/packs/PackGrid'
 import { awaitFonts, downloadBlob, renderToBlob } from '@/lib/export'
 import { packFileName, packZipFileName } from '@/lib/filename'
-import { bakeFilters } from '@/lib/image'
+import { bakeFilters, decodeImage, fitWithin } from '@/lib/image'
 import { DESIGN_SIZE, type RenderAssets } from '@/lib/render'
-import type { PhotoElement, PhotoFilters, Scene } from '@/lib/scene'
+import {
+  createPhotoElement,
+  createTextElement,
+  type PhotoElement,
+  type PhotoFilters,
+  type Scene,
+} from '@/lib/scene'
+import { parseScene } from '@/lib/serialize'
+import { loadDraft } from '@/lib/storage'
 import { buildPackZip } from '@/lib/zip'
 import { useEditorStore } from '@/store/editorStore'
 import { usePhotoStore } from '@/store/photoStore'
 
-const toolbarButton = `inline-flex items-center gap-1 border-2 border-ink bg-paper px-2.5 py-1.5 text-xs font-bold text-ink shadow-[2px_2px_0_0_var(--color-ink)] ${focusRing}`
+const toolbarButton = `inline-flex min-h-11 items-center gap-1 border-2 border-ink bg-paper px-2.5 py-1.5 text-xs font-bold text-ink shadow-[2px_2px_0_0_var(--color-ink)] ${focusRing}`
 
-const primaryButton = `inline-flex items-center justify-center gap-1 border-2 border-ink bg-alert px-4 py-2 font-bold text-ink shadow-[3px_3px_0_0_var(--color-ink)] transition-transform hover:-translate-y-0.5 ${focusRing}`
+const primaryButton = `inline-flex min-h-11 items-center justify-center gap-1 border-2 border-ink bg-alert px-4 py-2 font-bold text-ink shadow-[3px_3px_0_0_var(--color-ink)] transition-transform hover:-translate-y-0.5 ${focusRing}`
 
 /** Gap between fallback downloads so browsers are less likely to block later files. */
 const FALLBACK_DOWNLOAD_GAP_MS = 300
+
+/** Built-in photo used when /packs is opened without a photo or a draft. */
+const samplePhotoUrl = () => new URL('samples/student.webp', document.baseURI).href
+/** Caption of the demo scene the sample photo is dropped into. */
+const DEMO_CAPTION = '就这？'
+/** Same max edge as the editor upload pipeline so the demo photo fits 1080. */
+const DEMO_PHOTO_MAX_EDGE = 780
 
 /** One generated pack: the selected theme, its current captions and scenes. */
 interface GeneratedPack {
   packId: PackId
   captions: string[]
   scenes: Scene[]
+}
+
+/** A finished archive kept in state so the download is a user gesture. */
+interface ReadyZip {
+  blob: Blob
+  fileName: string
+  count: number
 }
 
 /** Loaded photo: the untouched source (for 1080 exports) plus bake for thumbs. */
@@ -87,7 +110,11 @@ export function PackPage() {
   const [zipping, setZipping] = useState(false)
   const [zipPhase, setZipPhase] = useState<'packing' | 'fallback'>('packing')
   const [zipProgress, setZipProgress] = useState(0)
+  const [readyZip, setReadyZip] = useState<ReadyZip | null>(null)
   const [note, setNote] = useState<string | null>(null)
+  const [bootPhase, setBootPhase] = useState<'idle' | 'loading' | 'ready' | 'failed'>('idle')
+  const [usingSample, setUsingSample] = useState(false)
+  const bootStartedRef = useRef(false)
 
   const photoElement = findPhoto(scene)
   const canGenerate = Boolean(photoElement && original)
@@ -140,6 +167,58 @@ export function PackPage() {
     }
   }, [photoUrl, photoElement, photoKey])
 
+  // Cold, direct loads of /packs have neither a scene nor a photo in memory.
+  // Restore the local draft when it is usable; otherwise seed a demo pack from
+  // the bundled sample so the page never dead-ends on the empty state.
+  useEffect(() => {
+    if (canGenerate || bootStartedRef.current) return
+    bootStartedRef.current = true
+    setBootPhase('loading')
+
+    void (async () => {
+      // 1) Saved draft: same photo/scene the editor would restore.
+      const draft = await loadDraft()
+      const draftScene = draft ? parseScene(draft.sceneJson) : null
+      if (draft && draftScene && findPhoto(draftScene)) {
+        usePhotoStore.getState().setPhoto(draft.photo, draft.cutout)
+        useEditorStore.getState().reset(draftScene)
+        setBootPhase('ready')
+        return
+      }
+
+      // 2) Built-in sample + classic template demo scene and demo pack.
+      try {
+        const response = await fetch(samplePhotoUrl())
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        const blob = await response.blob()
+        const bitmap = await decodeImage(blob)
+        const { width, height } = fitWithin(bitmap.width, bitmap.height, DEMO_PHOTO_MAX_EDGE)
+        bitmap.close()
+
+        // The sample is not cut out, so frame it like the editor's fallback.
+        const photo = { ...createPhotoElement(width, height), frame: true }
+        const text = createTextElement(DEMO_CAPTION)
+        const base: Scene = { background: { kind: 'none' }, elements: [photo, text] }
+        const demoScene = applyTemplate(base, TEMPLATES.classic, text.id)
+        const demoPack = PACKS.find((pack) => pack.templateId === 'classic') ?? PACKS[0]
+
+        usePhotoStore.getState().setPhoto(blob, null)
+        useEditorStore.getState().reset(demoScene)
+        setGenerated({
+          packId: demoPack.id,
+          captions: demoPack.captions.slice(),
+          scenes: demoPack.captions.map((caption) =>
+            buildPackScene(photo, demoPack, caption),
+          ),
+        })
+        setUsingSample(true)
+        setBootPhase('ready')
+      } catch {
+        setBootPhase('failed')
+      }
+    })()
+  }, [canGenerate])
+
   const selectPack = (pack: PackDef) => {
     if (zipping) return
     const currentPhoto = findPhoto(useEditorStore.getState().scene)
@@ -150,12 +229,15 @@ export function PackPage() {
       captions: pack.captions.slice(),
       scenes: pack.captions.map((caption) => buildPackScene(currentPhoto, pack, caption)),
     })
+    setReadyZip(null)
     setDownloadingIndex(null)
     setNote(null)
   }
 
   // Only the active cell's scene object is replaced, so only its canvas repaints.
   const cycleCaption = useCallback((index: number) => {
+    // Captions changed: an archive built from the previous set is stale.
+    setReadyZip(null)
     setGenerated((current) => {
       if (!current) return current
       const pack = PACKS.find((item) => item.id === current.packId)
@@ -218,7 +300,7 @@ export function PackPage() {
     )
   }
 
-  const downloadZip = async () => {
+  const buildZip = async () => {
     if (!generated || !activePhoto || zipping || downloadingIndex !== null) return
     const pack = PACKS.find((item) => item.id === generated.packId)
     if (!pack) return
@@ -229,10 +311,14 @@ export function PackPage() {
     setZipProgress(0)
     setNote('正在生成 ZIP，请稍候…')
     try {
+      // Keep the archive in state instead of downloading from the async
+      // callback: browsers may drop downloads that no longer sit inside a user
+      // gesture, so the save is a second, explicit click.
       const blob = await buildPackZip(scenes, activePhoto.raw, pack, setZipProgress)
-      downloadBlob(blob, packZipFileName(pack.name))
-      setNote(`已导出 ZIP：${scenes.length} 张 1080×1080 PNG + 使用说明.txt`)
+      setReadyZip({ blob, fileName: packZipFileName(pack.name), count: scenes.length })
+      setNote(`ZIP 已生成（${scenes.length} 张 PNG + 使用说明.txt），点击「下载 ZIP」保存`)
     } catch {
+      setReadyZip(null)
       setZipPhase('fallback')
       setZipProgress(0)
       await downloadIndividually(pack, scenes, activePhoto.raw)
@@ -240,6 +326,12 @@ export function PackPage() {
       setZipping(false)
       setZipProgress(0)
     }
+  }
+
+  const saveZip = () => {
+    if (!readyZip) return
+    downloadBlob(readyZip.blob, readyZip.fileName)
+    setNote(`已下载 ZIP：${readyZip.count} 张 1080×1080 PNG + 使用说明.txt`)
   }
 
   return (
@@ -257,19 +349,46 @@ export function PackPage() {
       </header>
 
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-3 py-4 sm:px-4 sm:py-5">
-        {!canGenerate ? (
-          <section
-            aria-label="需要照片"
-            className="mx-auto w-full max-w-xl border-2 border-ink bg-paper p-5 shadow-[6px_6px_0_0_var(--color-ink)] sm:p-6"
+        {usingSample && canGenerate ? (
+          <div
+            role="status"
+            className="flex flex-wrap items-center justify-between gap-2 border-2 border-ink bg-alert px-3 py-2 shadow-[3px_3px_0_0_var(--color-ink)]"
           >
-            <h2 className="font-display text-2xl font-bold">还没有可用的照片</h2>
-            <p className="mt-2 text-sm leading-relaxed text-ink/70">
-              整套表情包会重复使用你正在编辑的那张照片和抠图结果。先上传一张照片，选好模板再回来。
-            </p>
-            <Link to="/create" className={`${primaryButton} mt-4`}>
-              先去做一张
+            <p className="text-sm font-bold">当前是示例照片</p>
+            <Link
+              to="/create"
+              state={{ fresh: true }}
+              className={`${toolbarButton} bg-paper`}
+            >
+              换成我的照片
             </Link>
-          </section>
+          </div>
+        ) : null}
+
+        {!canGenerate ? (
+          bootPhase === 'failed' ? (
+            <section
+              aria-label="需要照片"
+              className="mx-auto w-full max-w-xl border-2 border-ink bg-paper p-5 shadow-[6px_6px_0_0_var(--color-ink)] sm:p-6"
+            >
+              <h2 className="font-display text-2xl font-bold">还没有可用的照片</h2>
+              <p className="mt-2 text-sm leading-relaxed text-ink/70">
+                示例照片加载失败，本地也没有可用的草稿。整套表情包会重复使用你正在编辑的那张照片和抠图结果，先上传一张照片再回来。
+              </p>
+              <Link to="/create" className={`${primaryButton} mt-4`}>
+                先去做一张
+              </Link>
+            </section>
+          ) : (
+            <section
+              aria-label="正在准备示例照片"
+              className="mx-auto w-full max-w-xl border-2 border-ink bg-paper p-5 shadow-[6px_6px_0_0_var(--color-ink)] sm:p-6"
+            >
+              <p role="status" className="text-sm font-bold text-ink/70">
+                正在恢复草稿或加载示例照片…
+              </p>
+            </section>
+          )
         ) : (
           <>
             <section aria-label="选择主题">
@@ -359,7 +478,10 @@ export function PackPage() {
                   <div className="mb-3 flex flex-wrap items-center gap-2 border-2 border-ink bg-paper px-2.5 py-2.5 shadow-[3px_3px_0_0_var(--color-ink)]">
                     <button
                       type="button"
-                      onClick={() => void downloadZip()}
+                      onClick={() => {
+                        if (readyZip) saveZip()
+                        else void buildZip()
+                      }}
                       disabled={zipping || downloadingIndex !== null}
                       className={`${primaryButton} text-sm disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0`}
                     >
@@ -367,10 +489,14 @@ export function PackPage() {
                         ? zipPhase === 'fallback'
                           ? `正在逐张下载 ${zipProgress}%`
                           : `正在打包 ${zipProgress}%`
-                        : '整套下载 ZIP'}
+                        : readyZip
+                          ? '下载 ZIP'
+                          : '生成 ZIP'}
                     </button>
                     <span className="text-[11px] leading-snug text-ink/60">
-                      {generated.scenes.length} 张 1080×1080 PNG + 使用说明.txt，一次下载
+                      {readyZip
+                        ? `${readyZip.count} 张 PNG + 使用说明.txt 已打包，点击下载`
+                        : `${generated.scenes.length} 张 1080×1080 PNG + 使用说明.txt，先打包再下载`}
                     </span>
                     {zipping ? (
                       <div

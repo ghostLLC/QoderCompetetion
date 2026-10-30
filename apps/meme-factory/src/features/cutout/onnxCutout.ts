@@ -5,7 +5,10 @@
  * live under the app's own origin. Images never leave the browser.
  */
 
-export type CutoutProgress = { stage: 'download' | 'inference'; percent?: number }
+export type CutoutProgress = {
+  stage: 'download' | 'runtime' | 'inference'
+  percent?: number
+}
 
 export type RemoveBackgroundOptions = {
   onProgress?: (progress: CutoutProgress) => void
@@ -187,19 +190,21 @@ async function loadModel(
   return modelPromise
 }
 
-type OrtModule = typeof import('onnxruntime-web')
-type OrtSession = import('onnxruntime-web').InferenceSession
+type OrtModule = typeof import('onnxruntime-web/wasm')
+type OrtSession = import('onnxruntime-web/wasm').InferenceSession
 
 let ortPromise: Promise<OrtModule> | null = null
 let sessionPromise: Promise<OrtSession> | null = null
 
 function loadOrt(): Promise<OrtModule> {
   if (!ortPromise) {
-    ortPromise = import('onnxruntime-web').then((ort) => {
-      // The default ORT 1.21 browser bundle requests the JSEP runtime
-      // (ort-wasm-simd-threaded.jsep.*), but this app self-hosts the standard
-      // pair copied by scripts/copy-ort.mjs. Point wasmPaths at those exact
-      // files; the wasm execution provider runs on the standard pair.
+    // Import the WASM-only entry instead of the full browser bundle: the bundle
+    // also ships the JSEP/WebGPU builds, which would make Vite emit a dead
+    // ~24MB ort-wasm-simd-threaded.jsep wasm next to our self-hosted pair.
+    ortPromise = import('onnxruntime-web/wasm').then((ort) => {
+      // This app self-hosts the standard pair copied by scripts/copy-ort.mjs.
+      // Point wasmPaths at those exact files; the wasm execution provider runs
+      // on the standard pair.
       const base = new URL('ort/', document.baseURI).href
       ort.env.wasm.wasmPaths = {
         wasm: new URL('ort-wasm-simd-threaded.wasm', base).href,
@@ -224,6 +229,10 @@ async function getSession(
   const buffer = await loadModel(onProgress, signal)
   throwIfAborted(signal)
   if (!sessionPromise) {
+    // The model is available now; the remaining first-run wait is engine
+    // startup (dynamic import + wasm compile + session build). Report it so the
+    // UI does not sit at "download 100%" while the session initializes.
+    onProgress?.({ stage: 'runtime' })
     sessionPromise = ort.InferenceSession.create(new Uint8Array(buffer), {
       executionProviders: ['wasm'],
       graphOptimizationLevel: 'all',

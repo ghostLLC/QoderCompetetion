@@ -2,7 +2,7 @@
 
 2026 Qoder 高校创造力大赛 · LifeHack 赛道参赛作品。所有内容集中在仓库根目录，设计、代码、素材与提交材料可多端协作。
 
-**在线体验：** https://meme-arsenal-h9ls3oya5li.qoder.zone
+**在线体验：** https://meme-arsenal-h9ls3oya5li.qoder.zone（最终部署，2026-10-29 已实测匿名访问正常）
 
 上传一张照片，3 分钟造出一整套原创表情包。抠图在浏览器本地完成，照片不上传服务器。
 
@@ -55,7 +55,7 @@ npm run build        # tsc + vite build
 npm run fetch-model  # 重新下载 u2netp（可选，模型已提交）
 ```
 
-要求 Node 20+（开发使用 Node 24）。详细说明见 `apps/meme-factory/README.md`。
+要求 Node >=22.12（Vite 8 / Vitest 5；开发使用 Node 24）。详细说明见 `apps/meme-factory/README.md`。
 
 ## 技术要点
 

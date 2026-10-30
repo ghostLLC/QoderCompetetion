@@ -162,6 +162,15 @@ export default function HomePage() {
 
   const playSample = async (sample: SampleDef) => {
     if (pendingId) return
+
+    // A sample replaces the editor scene, so never overwrite a local draft
+    // silently. Re-check storage because the initial probe may still be in
+    // flight on first paint.
+    const draftExists = hasDraft || (await loadDraft()) !== null
+    if (draftExists && !window.confirm('示例会替换你未完成的草稿，继续？')) return
+    // The page may have been left while the draft check was in flight.
+    if (cancelledRef.current) return
+
     setPendingId(sample.id)
     setSampleError(null)
     const handoff = toHandoff(sample)
@@ -233,7 +242,11 @@ export default function HomePage() {
               </p>
 
               <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                <ButtonLink to="/create" className="w-full px-6 py-4 text-lg sm:w-auto">
+                <ButtonLink
+                  to="/create"
+                  state={{ fresh: true }}
+                  className="w-full px-6 py-4 text-lg sm:w-auto"
+                >
                   造我的表情包
                   <span aria-hidden="true">→</span>
                 </ButtonLink>
@@ -312,7 +325,7 @@ export default function HomePage() {
             {sampleError ? (
               <p
                 role="alert"
-                className="mt-6 border-[3px] border-ink bg-danger px-3 py-2 text-sm font-bold text-paper shadow-[4px_4px_0_0_var(--color-ink)]"
+                className="mt-6 border-[3px] border-ink bg-danger px-3 py-2 text-sm font-bold text-ink shadow-[4px_4px_0_0_var(--color-ink)]"
               >
                 {sampleError}
               </p>

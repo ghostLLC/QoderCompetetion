@@ -22,11 +22,12 @@ import { UploadDropzone } from '@/features/upload/UploadDropzone'
 import { exportSingle } from '@/lib/export'
 import { decodeImage, fitWithin } from '@/lib/image'
 import { parseScene } from '@/lib/serialize'
-import { loadDraft } from '@/lib/storage'
+import { clearDraft, loadDraft } from '@/lib/storage'
 import {
   createPhotoElement,
   createStickerElement,
   createTextElement,
+  emptyScene,
   newId,
   type Background,
   type PhotoElement,
@@ -40,8 +41,23 @@ import { useDraftAutosave } from '@/store/useDraftAutosave'
 
 const PHOTO_MAX_EDGE = 780
 type Stage = 'upload' | 'cutout' | 'editor'
+/**
+ * The cutout engine gains a 'runtime' phase (loading the inference engine)
+ * alongside 'download' and 'inference'. Keep the local union wider than the
+ * module's current type so either build renders the phase correctly.
+ */
+type CutoutStageName = CutoutProgress['stage'] | 'runtime'
 
 const toolbarButton = `inline-flex min-h-11 items-center gap-1 border-2 border-ink bg-paper px-2.5 py-1.5 text-xs font-bold text-ink shadow-[2px_2px_0_0_var(--color-ink)] disabled:cursor-not-allowed disabled:opacity-40 lg:min-h-0 ${focusRing}`
+
+/** Home's primary CTA asks for a clean start via `{ fresh: true }` router state. */
+function isFreshStart(state: unknown): boolean {
+  return (
+    typeof state === 'object' &&
+    state !== null &&
+    (state as { fresh?: unknown }).fresh === true
+  )
+}
 
 function withPhotoFrame(scene: Scene, frame: boolean): Scene {
   if (!scene.elements.some((element) => element.type === 'photo')) return scene
@@ -58,11 +74,14 @@ export function EditorPage() {
   const navigate = useNavigate()
   // A sample handoff from the home page: validated once per location change.
   const sampleHandoff = useMemo(() => parseSampleHandoff(location.state), [location.state])
+  // Home's primary CTA: start over even in a warm SPA session. A sample
+  // handoff wins when both signals are present.
+  const freshStart = useMemo(() => isFreshStart(location.state), [location.state])
 
   const [stage, setStage] = useState<Stage>(() => {
-    // A fresh sample always starts the upload flow, even when this SPA session
-    // still holds an older edited scene.
-    if (sampleHandoff) return 'upload'
+    // A fresh sample or a "start over" handoff always begins at the uploader,
+    // even when this SPA session still holds an older edited scene.
+    if (sampleHandoff || freshStart) return 'upload'
     const hasPhoto = Boolean(usePhotoStore.getState().photoUrl)
     const hasScene = useEditorStore.getState().scene.elements.length > 0
     return hasPhoto && hasScene ? 'editor' : 'upload'
@@ -81,9 +100,10 @@ export function EditorPage() {
   const controllerRef = useRef<AbortController | null>(null)
   const originalRef = useRef<Blob | null>(null)
   // Seeded from the handoff so the mount-time draft restore is skipped while
-  // the sample is still downloading.
-  const uploadStartedRef = useRef(Boolean(sampleHandoff))
+  // the sample is still downloading (and after a fresh "start over" click).
+  const uploadStartedRef = useRef(Boolean(sampleHandoff) || freshStart)
   const sampleConsumedRef = useRef(false)
+  const freshConsumedRef = useRef(false)
   const mountedRef = useRef(true)
 
   const scene = useEditorStore((state) => state.scene)
@@ -91,6 +111,8 @@ export function EditorPage() {
   const pastLength = useEditorStore((state) => state.past.length)
   const futureLength = useEditorStore((state) => state.future.length)
   const photoUrl = usePhotoStore((state) => state.photoUrl)
+  const photoOriginal = usePhotoStore((state) => state.original)
+  const photoCutout = usePhotoStore((state) => state.cutout)
   const { image: exportImage } = usePhotoAsset()
 
   // Local drafts only make sense once a photo exists; the hook stays mounted
@@ -111,6 +133,16 @@ export function EditorPage() {
         null)
   const stickerElement = selectedElement?.type === 'sticker' ? selectedElement : null
 
+  const hasPhotoElement = scene.elements.some((element) => element.type === 'photo')
+  // An editor without a photo cannot render (e.g. a restored draft whose photo
+  // layer was removed); fall back to the uploader instead.
+  const viewStage: Stage = stage === 'editor' && !hasPhotoElement ? 'upload' : stage
+  const canRedoCutout =
+    viewStage === 'editor' &&
+    Boolean(photoOriginal) &&
+    !cutoutRunning &&
+    (photoCutout === null || photoElement?.frame === true)
+
   useEffect(() => {
     mountedRef.current = true
     return () => {
@@ -119,6 +151,30 @@ export function EditorPage() {
       controllerRef.current = null
     }
   }, [])
+
+  // Home's primary CTA asks for a clean slate. Drop the draft first (autosave
+  // writes queue behind it) and clear the warm-session stores before the
+  // draft-restore effect below can look at them. A sample handoff wins over
+  // this flag: the sample effect consumes the whole router state itself.
+  useEffect(() => {
+    if (!freshStart || sampleHandoff || freshConsumedRef.current) return
+    freshConsumedRef.current = true
+
+    controllerRef.current?.abort()
+    controllerRef.current = null
+    void clearDraft()
+    usePhotoStore.getState().clear()
+    useEditorStore.getState().reset(emptyScene())
+    setActiveTemplate(null)
+    setCutoutError(null)
+    setProgress(null)
+    setCutoutRunning(false)
+    setUploadError(null)
+    setExportNote(null)
+    setStage('upload')
+    // Consume the flag so refresh/back opens the plain uploader.
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: null })
+  }, [freshStart, sampleHandoff, location.pathname, location.search, navigate])
 
   // Restore the last local draft on a cold mount. A photo already in the store
   // means this SPA session has a live upload, which must win over the draft.
@@ -137,8 +193,6 @@ export function EditorPage() {
       usePhotoStore.getState().setPhoto(draft.photo, draft.cutout ?? null)
       // `reset` also clears selection/history; frame state lives in the scene.
       useEditorStore.getState().reset(restored)
-      const mainText = restored.elements.find((element) => element.type === 'text')
-      useEditorStore.getState().select(mainText?.id ?? null)
       setStage('editor')
     })()
 
@@ -150,9 +204,9 @@ export function EditorPage() {
   const enterEditor = useCallback((frame: boolean) => {
     const store = useEditorStore.getState()
     const next = withPhotoFrame(store.scene, frame)
+    // `reset` clears selection/history. Deliberately no auto-selection: the
+    // picker panels already fall back to the first text.
     store.reset(next)
-    const mainText = next.elements.find((element) => element.type === 'text')
-    store.select(mainText?.id ?? null)
     setStage('editor')
   }, [])
 
@@ -245,6 +299,9 @@ export function EditorPage() {
     if (!sampleHandoff || sampleConsumedRef.current) return
     sampleConsumedRef.current = true
 
+    // The sample replaces the session's draft: delete it before the sample
+    // photo lands so autosave cannot resurrect the previous edit.
+    void clearDraft()
     // Drop the state from history so refresh/back opens the plain uploader
     // instead of replaying the sample.
     navigate(`${location.pathname}${location.search}`, { replace: true, state: null })
@@ -284,6 +341,36 @@ export function EditorPage() {
   const handleRetryCutout = () => {
     const original = originalRef.current ?? usePhotoStore.getState().original
     if (original) void runCutout(original)
+  }
+
+  // Editor-stage "start over": drop the draft and the in-memory session, then
+  // land on the plain uploader with history state cleared.
+  const handleReplacePhoto = () => {
+    if (!window.confirm('换照片会清空当前编辑和本地草稿，继续？')) return
+    stopCutout()
+    // Queue the deletion before any autosave write that may follow; queued
+    // saves run in order, so the clear always wins.
+    void clearDraft()
+    usePhotoStore.getState().clear()
+    useEditorStore.getState().reset(emptyScene())
+    originalRef.current = null
+    uploadStartedRef.current = true
+    setActiveTemplate(null)
+    setCutoutError(null)
+    setExportNote(null)
+    setUploadError(null)
+    setStage('upload')
+    navigate('/create', { replace: true, state: null })
+  }
+
+  // Frame mode (or a draft without a cutout) can retry from the editor: switch
+  // back to the cutout stage so progress and the existing error UI are shown.
+  const handleRedoCutout = () => {
+    const original = usePhotoStore.getState().original
+    if (!original || controllerRef.current) return
+    setCutoutError(null)
+    setStage('cutout')
+    void runCutout(original)
   }
 
   const handleContinueWithoutCutout = () => {
@@ -405,14 +492,19 @@ export function EditorPage() {
     }
   }
 
+  // Widen explicitly: TypeScript narrows a `const` to its initializer, which
+  // would drop the future 'runtime' stage from the local union.
+  const progressStage = (progress?.stage ?? null) as CutoutStageName | null
   const progressLabel =
-    progress?.stage === 'inference'
+    progressStage === 'inference'
       ? '正在抠图…'
-      : progress?.stage === 'download'
-        ? `下载模型 ${progress.percent ?? 0}%`
-        : '准备模型中…'
+      : progressStage === 'runtime'
+        ? '正在加载推理引擎…'
+        : progressStage === 'download'
+          ? `下载模型 ${progress?.percent ?? 0}%`
+          : '准备模型中…'
   const downloadPercent =
-    progress?.stage === 'download' ? Math.min(100, Math.max(0, progress.percent ?? 0)) : null
+    progressStage === 'download' ? Math.min(100, Math.max(0, progress?.percent ?? 0)) : null
 
   const activePanelLabel =
     PANEL_TABS.find((tab) => tab.id === activePanel)?.label ?? '编辑'
@@ -502,8 +594,16 @@ export function EditorPage() {
           <h1 className="font-display text-lg font-bold">编辑台</h1>
 
           <div className="ml-auto flex flex-wrap items-center gap-1.5">
-            {stage === 'editor' ? (
+            {viewStage === 'editor' ? (
               <>
+                <button type="button" onClick={handleReplacePhoto} className={toolbarButton}>
+                  换照片
+                </button>
+                {canRedoCutout ? (
+                  <button type="button" onClick={handleRedoCutout} className={toolbarButton}>
+                    重新抠图
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => useEditorStore.getState().undo()}
@@ -543,21 +643,20 @@ export function EditorPage() {
                     ))}
                   </select>
                 </div>
+                <Link to="/packs" aria-label="生成整套" className={toolbarButton}>
+                  <span className="sm:hidden">整套</span>
+                  <span className="hidden sm:inline">生成整套</span>
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => void handleExport()}
+                  disabled={exporting}
+                  aria-busy={exporting}
+                  className={`${toolbarButton} bg-alert`}
+                >
+                  {exporting ? '导出中…' : '导出当前张'}
+                </button>
               </>
-            ) : null}
-            <Link to="/packs" className={`${toolbarButton} max-sm:hidden`}>
-              生成整套
-            </Link>
-            {stage === 'editor' ? (
-              <button
-                type="button"
-                onClick={() => void handleExport()}
-                disabled={exporting}
-                aria-busy={exporting}
-                className={`${toolbarButton} bg-alert`}
-              >
-                {exporting ? '导出中…' : '导出当前张'}
-              </button>
             ) : null}
           </div>
         </div>
@@ -568,7 +667,7 @@ export function EditorPage() {
         ) : null}
       </header>
 
-      {stage === 'upload' ? (
+      {viewStage === 'upload' ? (
         <div className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 py-8">
           <div>
             <h2 className="font-display text-3xl font-bold">先来一张照片</h2>
@@ -599,7 +698,7 @@ export function EditorPage() {
         </div>
       ) : null}
 
-      {stage === 'cutout' ? (
+      {viewStage === 'cutout' ? (
         <div className="mx-auto grid w-full max-w-3xl gap-4 px-4 py-6 sm:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
           <div className="border-2 border-ink bg-paper p-2 shadow-[4px_4px_0_0_var(--color-ink)]">
             {photoUrl ? (
@@ -651,7 +750,7 @@ export function EditorPage() {
                   )}
                 </div>
                 <p className="mt-2 text-[11px] leading-relaxed text-ink/60">
-                  首次需要下载约 4.4MB 模型，之后会缓存
+                  首次需要下载约 17MB（模型 + 推理运行时）
                 </p>
               </div>
             )}
@@ -691,7 +790,7 @@ export function EditorPage() {
         </div>
       ) : null}
 
-      {stage === 'editor' ? (
+      {viewStage === 'editor' ? (
         <div className="mx-auto grid max-w-6xl gap-3 px-3 pt-3 pb-24 sm:px-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start lg:pb-3">
           <section aria-label="编辑画布" className="min-w-0 lg:col-start-1 lg:row-start-1">
             <div className="border-2 border-ink bg-paper p-2 shadow-[6px_6px_0_0_var(--color-ink)]">

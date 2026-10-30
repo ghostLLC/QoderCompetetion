@@ -15,6 +15,12 @@ const POSITIONS: Array<{ id: 'top' | 'center' | 'bottom'; label: string; icon: s
   { id: 'bottom', label: '底部', icon: '↓' },
 ]
 
+const ALIGN_OPTIONS: Array<{ id: TextElement['align']; label: string }> = [
+  { id: 'left', label: '左对齐' },
+  { id: 'center', label: '居中' },
+  { id: 'right', label: '右对齐' },
+]
+
 export interface TextPanelProps {
   element: TextElement | null
   onUpdate: (patch: Partial<TextElement>) => void
@@ -81,6 +87,9 @@ export function TextPanel({ element, onUpdate, onAdd }: TextPanelProps) {
             </div>
           </div>
 
+          {/* Deliberate deviation from the spec's 12–96 range: below 24 px text
+              is unreadable on a phone, and 96 px caps the cover caption too low.
+              Recorded in docs/build-log.md. */}
           <SliderField
             label="字号"
             value={element.fontSize}
@@ -89,6 +98,21 @@ export function TextPanel({ element, onUpdate, onAdd }: TextPanelProps) {
             suffix="px"
             onCommit={(fontSize) => onUpdate({ fontSize })}
           />
+
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-bold">对齐</span>
+            <div className="flex gap-1.5">
+              {ALIGN_OPTIONS.map((option) => (
+                <ChipButton
+                  key={option.id}
+                  active={element.align === option.id}
+                  onClick={() => onUpdate({ align: option.id })}
+                >
+                  {option.label}
+                </ChipButton>
+              ))}
+            </div>
+          </div>
 
           <div className="flex flex-col gap-1.5">
             <ColorField

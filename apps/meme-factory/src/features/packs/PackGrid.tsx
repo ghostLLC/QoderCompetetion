@@ -1,4 +1,5 @@
 import { memo, useEffect, useRef } from 'react'
+import type { CSSProperties } from 'react'
 
 import { focusRing } from '@/features/editor/panels/controls'
 import { renderScene, type RenderAssets } from '@/lib/render'
@@ -7,7 +8,20 @@ import type { Scene } from '@/lib/scene'
 /** Thumbnail render size in CSS pixels (shared by every pack cell). */
 export const PACK_THUMB_SIZE = 480
 
-const cellButton = `inline-flex flex-1 items-center justify-center gap-1 border-2 border-ink px-2 py-1.5 text-[11px] font-bold text-ink shadow-[2px_2px_0_0_var(--color-ink)] transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${focusRing}`
+/**
+ * Subtle checkerboard behind the canvas so transparent scenes read as
+ * transparent instead of white. Purely cosmetic: the canvas pixels (and every
+ * exported PNG) are untouched.
+ */
+const CHECKERBOARD: CSSProperties = {
+  backgroundColor: '#fafafa',
+  backgroundImage:
+    'linear-gradient(45deg, #e4e4e4 25%, transparent 25%, transparent 75%, #e4e4e4 75%), linear-gradient(45deg, #e4e4e4 25%, transparent 25%, transparent 75%, #e4e4e4 75%)',
+  backgroundSize: '16px 16px',
+  backgroundPosition: '0 0, 8px 8px',
+}
+
+const cellButton = `inline-flex min-h-11 flex-1 items-center justify-center gap-1 border-2 border-ink px-2 py-1.5 text-[11px] font-bold text-ink shadow-[2px_2px_0_0_var(--color-ink)] transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${focusRing}`
 
 interface PackCellProps {
   index: number
@@ -53,7 +67,8 @@ const PackCell = memo(function PackCell({
         height={PACK_THUMB_SIZE}
         role="img"
         aria-label={`第 ${index + 1} 张表情包预览：${caption}`}
-        className="block aspect-square w-full border-2 border-ink bg-white"
+        style={CHECKERBOARD}
+        className="block aspect-square w-full border-2 border-ink"
       >
         第 {index + 1} 张表情包预览
       </canvas>

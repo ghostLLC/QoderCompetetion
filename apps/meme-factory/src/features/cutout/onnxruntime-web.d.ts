@@ -4,3 +4,10 @@
 declare module 'onnxruntime-web' {
   export * from 'onnxruntime-common'
 }
+
+// The WASM-only entry (`onnxruntime-web/wasm`) has the same missing types
+// condition in its exports map. It exposes the same runtime surface, so mirror
+// the declaration for the subpath as well.
+declare module 'onnxruntime-web/wasm' {
+  export * from 'onnxruntime-common'
+}

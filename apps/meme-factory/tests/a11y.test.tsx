@@ -8,7 +8,7 @@ import { EditorCanvas } from '@/features/editor/EditorCanvas'
 import { EditorPage } from '@/features/editor/EditorPage'
 import { PanelTabs } from '@/features/editor/panels/PanelTabs'
 import type { PanelId } from '@/features/editor/panels/panelConfig'
-import { createTextElement, emptyScene } from '@/lib/scene'
+import { createPhotoElement, createTextElement, emptyScene } from '@/lib/scene'
 import { useEditorStore } from '@/store/editorStore'
 import { usePhotoStore } from '@/store/photoStore'
 
@@ -35,7 +35,7 @@ vi.mock('react-konva', async () => {
   })
 
   const Transformer = forwardRef<unknown, Record<string, unknown>>(
-    function KonvaTransformer(_props, ref) {
+    function KonvaTransformer(props, ref) {
       useImperativeHandle(
         ref,
         () => ({
@@ -44,7 +44,11 @@ vi.mock('react-konva', async () => {
         }),
         [],
       )
-      return null
+      return createElement('div', {
+        'data-konva': 'transformer',
+        'data-anchor-size': String(props.anchorSize ?? ''),
+        'data-padding': String(props.padding ?? ''),
+      })
     },
   )
 
@@ -212,6 +216,84 @@ describe('editor keyboard ownership', () => {
   })
 })
 
+describe('editor canvas affordances', () => {
+  beforeEach(() => {
+    useEditorStore.getState().reset({ background: { kind: 'none' }, elements: [] })
+  })
+
+  test('the canvas is focusable and nudges or deletes while it owns focus', () => {
+    const text = createTextElement('就这？')
+    useEditorStore.getState().reset({ background: { kind: 'none' }, elements: [text] })
+    useEditorStore.getState().select(text.id)
+
+    render(<EditorCanvas />)
+    const canvas = screen.getByRole('img', { name: /表情包画布/ })
+
+    expect(canvas).toHaveAttribute('tabindex', '0')
+    expect(canvas).toHaveAccessibleName(/方向键微调/)
+    expect(canvas.className).toContain('focus-ring')
+
+    canvas.focus()
+    expect(canvas).toHaveFocus()
+
+    fireEvent.keyDown(canvas, { key: 'ArrowRight' })
+    expect(useEditorStore.getState().scene.elements[0]).toMatchObject({ x: text.x + 2 })
+
+    fireEvent.keyDown(canvas, { key: 'Delete' })
+    expect(useEditorStore.getState().scene.elements).toHaveLength(0)
+  })
+
+  test('pointer presses move focus onto the canvas', () => {
+    render(<EditorCanvas />)
+    const canvas = screen.getByRole('img', { name: /表情包画布/ })
+
+    fireEvent.pointerDown(canvas)
+
+    expect(canvas).toHaveFocus()
+  })
+
+  test('a transparent background shows a checkerboard behind the stage', () => {
+    render(<EditorCanvas />)
+    const canvas = screen.getByRole('img', { name: /表情包画布/ })
+
+    expect(canvas.style.backgroundImage).toContain('repeating-conic-gradient')
+  })
+
+  test('opaque backgrounds keep the plain stage', () => {
+    useEditorStore
+      .getState()
+      .reset({ background: { kind: 'solid', color: '#f7f5ef' }, elements: [] })
+
+    render(<EditorCanvas />)
+    const canvas = screen.getByRole('img', { name: /表情包画布/ })
+
+    expect(canvas.style.backgroundImage).toBe('')
+  })
+
+  test('coarse pointers get compact, padded transformer handles', () => {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: vi.fn((query: string) => ({
+        matches: query.includes('coarse'),
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    })
+
+    try {
+      render(<EditorCanvas />)
+      const transformer = document.querySelector('[data-konva="transformer"]')
+
+      expect(transformer).toHaveAttribute('data-anchor-size', '16')
+      expect(transformer).toHaveAttribute('data-padding', '14')
+    } finally {
+      delete (window as { matchMedia?: unknown }).matchMedia
+    }
+  })
+})
+
 describe('mobile editor sheet', () => {
   const initialWidth = window.innerWidth
 
@@ -234,7 +316,10 @@ describe('mobile editor sheet', () => {
       writable: true,
       value: 375,
     })
-    useEditorStore.getState().reset({ ...emptyScene(), elements: [createTextElement('就这？')] })
+    useEditorStore.getState().reset({
+      ...emptyScene(),
+      elements: [createPhotoElement(800, 800), createTextElement('就这？')],
+    })
     usePhotoStore.getState().setPhoto(new Blob(['photo']), null)
   })
 

@@ -6,7 +6,7 @@ const TONE_CLASS: Record<BadgeTone, string> = {
   alert: 'bg-alert text-ink',
   paper: 'bg-paper text-ink',
   ink: 'bg-ink text-paper',
-  danger: 'bg-danger text-paper',
+  danger: 'bg-danger text-ink',
 }
 
 export interface BadgeProps {

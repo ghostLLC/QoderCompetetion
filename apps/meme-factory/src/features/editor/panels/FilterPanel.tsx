@@ -55,17 +55,28 @@ export function FilterPanel({ element, onUpdate }: FilterPanelProps) {
         ))}
       </div>
 
-      <ChipButton
-        active={filters.grayscale}
-        disabled={!element}
-        onClick={() =>
-          element
-            ? onUpdate({ filters: { ...element.filters, grayscale: !element.filters.grayscale } })
-            : undefined
-        }
-      >
-        黑白 {filters.grayscale ? '开' : '关'}
-      </ChipButton>
+      <div className="flex flex-col gap-1.5">
+        <ChipButton
+          active={filters.grayscale}
+          disabled={!element}
+          onClick={() =>
+            element
+              ? onUpdate({ filters: { ...element.filters, grayscale: !element.filters.grayscale } })
+              : undefined
+          }
+        >
+          黑白 {filters.grayscale ? '开' : '关'}
+        </ChipButton>
+
+        <ChipButton
+          active={element?.flipX ?? false}
+          disabled={!element}
+          title="左右镜像照片"
+          onClick={() => element && onUpdate({ flipX: !element.flipX })}
+        >
+          水平翻转 {element?.flipX ? '开' : '关'}
+        </ChipButton>
+      </div>
 
       <button
         type="button"

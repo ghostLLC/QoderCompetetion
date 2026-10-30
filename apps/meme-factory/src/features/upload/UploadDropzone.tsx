@@ -182,7 +182,7 @@ export function UploadDropzone({ onPhoto }: UploadDropzoneProps) {
           type="button"
           onClick={openCamera}
           onKeyDown={(event) => handleKeyDown(openCamera, event)}
-          className="inline-flex items-center gap-2 rounded-xl border-2 border-ink bg-paper px-3 py-1.5 text-sm font-bold text-ink shadow-[2px_2px_0_0_var(--color-ink)]"
+          className="inline-flex min-h-11 items-center gap-2 rounded-xl border-2 border-ink bg-paper px-3 py-1.5 text-sm font-bold text-ink shadow-[2px_2px_0_0_var(--color-ink)]"
         >
           <CameraIcon />
           拍照

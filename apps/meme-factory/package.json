@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
   "scripts": {
     "dev": "node scripts/copy-ort.mjs && vite",
     "build": "node scripts/copy-ort.mjs && tsc -b && vite build",

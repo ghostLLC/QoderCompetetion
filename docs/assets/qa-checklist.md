@@ -21,6 +21,10 @@ Legend: PASS = verified with the evidence listed. UNVERIFIED = not verified in t
 - **Qoder attribution:** PASS — home footer shows "用 Qoder 构建 · 无账号 · 无上传" and the "用 Qoder 造出来的" section.
 - **Error fallback screenshot:** `docs/assets/qa-fallback-frame.png` (frame mode, export success banner, 1080×1080).
 
+## Known limitations (not verified — no pass claimed)
+
+- **Real iOS / Android devices:** not tested. Soft-keyboard overlap and scroll behavior in the editor, Safari's Canvas filter / transparent-PNG rendering, and ZIP download/save on mobile Safari and Android Chrome were only exercised in desktop Chrome and 375/500 px emulated viewports. This remains a known limitation rather than a PASS.
+
 ## Test / build
 
 - `npm run test`: 20 files, 172 tests passed.

@@ -2,6 +2,10 @@
 
 Vite + React 19 + TypeScript 单页应用。纯静态、无后端，所有图片处理在浏览器本地完成。
 
+线上版本：https://meme-arsenal-h9ls3oya5li.qoder.zone（2026-10-29 最终部署，已实测可匿名访问）。
+
+环境要求：Node >=22.12（Vite 8 / Vitest 5 的最低版本；开发使用 Node 24），见 `package.json` 的 `engines`。
+
 ## 命令
 
 ```bash

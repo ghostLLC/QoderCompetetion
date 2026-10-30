@@ -106,6 +106,7 @@ describe('buildPackZip', () => {
     expect(readme).toContain('斗图军火库')
     expect(readme).toContain('不会上传')
     expect(readme).toContain('1080×1080')
+    expect(readme).toContain('https://meme-arsenal-h9ls3oya5li.qoder.zone')
     expect(readme).toMatch(/\d{4}-\d{2}-\d{2}/)
 
     // Every scene is rendered once, at full design resolution.
